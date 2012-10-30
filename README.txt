@@ -63,7 +63,7 @@ CONSIDERATIONS
              Challenge = "\x11\x22\x33\x44\x55\x66\x77\x88"
              NumChal = "1122334455667788" "
  
-  Apparently, since a recent update Windows does not send valids SMB
+  Apparently, Windows under certain circumstances does not send valids SMB
   NTLMv1 credentials when the fixed challenge 1122334455667788 is set.
 
 
