@@ -1,5 +1,6 @@
 ChangeLog from 0.6 to 1.0:
-
+- Improvement: final Hash is now printed to stdout instead of NT and LM 
+- Fix: Removed hardcoded challenge for SQL NTLM
 - Fix: Removed hardcoded challenge for HTTP NTLM
 - Added an HTTP server with support for ntlmv1/v2 and basic Auth.
 - Added command line switch support with optparse.

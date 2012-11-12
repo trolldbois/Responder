@@ -63,7 +63,7 @@ CONSIDERATIONS
              Challenge = "\x11\x22\x33\x44\x55\x66\x77\x88"
              NumChal = "1122334455667788" "
  
-  Apparently, Windows under certain circumstances does not send valids SMB
+  Apparently, Windows, under certain circumstances does not send valids SMB
   NTLMv1 credentials when the fixed challenge 1122334455667788 is set.
 
 
@@ -82,7 +82,7 @@ If you're not joined to a domain, use:
 
 python Responder.py -d WORKGROUP -i 10.20.30.40
 
-For more information and read this post: 
+For more information read this post: 
 http://blog.spiderlabs.com/2012/10/introducing-responder-10.html
 
 COPYRIGHT

