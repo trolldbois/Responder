@@ -552,7 +552,6 @@ def ParseSQLHash(data,client):
        outfile = "MSSQL-NTLMv1-Client-"+client+".txt"
        WriteData(outfile,User+"::"+Domain+":"+LMHash+":"+NtHash+":"+NumChal)
     if NthashLen > 60:
-       print NthashLen
        print "[+]MSSQL NTLMv2 Hash detected"
        DomainLen = struct.unpack('<H',data[36:38])[0]
        NthashOffset = struct.unpack('<H',data[32:34])[0]
