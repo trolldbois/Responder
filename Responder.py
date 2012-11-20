@@ -59,6 +59,7 @@ Show_Help("[+]NBT-NS & LLMNR answerer started\n")
 def WriteData(outfile,data):
     with open(outfile,"w") as outf:
          outf.write(data)
+	 outf.write("\n")
          outf.close()
 
 # Change this if needed. Currently using the same challenge as metasploit since several rainbow tables were created with that challenge.
