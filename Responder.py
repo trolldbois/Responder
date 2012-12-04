@@ -1,3 +1,4 @@
+#! /usr/bin/env python
 # NBT-NS/LLMNR Responder
 # Created by Laurent Gaffie
 # Copyright (C) 2012 Trustwave Holdings, Inc.
