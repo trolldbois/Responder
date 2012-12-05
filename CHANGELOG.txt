@@ -1,4 +1,7 @@
 ChangeLog from 0.6 to 1.3:
+- Fix: Typo in logfile description
+- Added: Option for logging to a file (ravenium).
+- Added: Basic exception handling for server sockets (ravenium).
 - Added: Logging functionality, now logs all Responder activity to a file with date and time.
 - Added: Print IP address to stdout for each protocol 
 - Improvement: Added new line on Writedata (atucom)
