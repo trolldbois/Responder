@@ -936,12 +936,18 @@ SocketServer.TCPServer.allow_reuse_address = 1
 
 
 def serve_thread_udp(host, port, handler):
-    server = SocketServer.UDPServer((host, port), handler)
-    server.serve_forever()
+	try:
+		server = SocketServer.UDPServer((host, port), handler)
+		server.serve_forever()
+	except:
+		print "Error starting UDP server on port " + str(port) + ". Check that you have the necessary permissions (i.e. root) and no other servers are running."
  
 def serve_thread_tcp(host, port, handler):
-    server = SocketServer.TCPServer((host, port), handler)
-    server.serve_forever()
+	try:
+		server = SocketServer.TCPServer((host, port), handler)
+		server.serve_forever()
+	except:
+		print "Error starting TCP server on port " + str(port) + ". Check that you have the necessary permissions (i.e. root) and no other servers are running."
 
 def main():
     try:
