@@ -36,7 +36,7 @@ parser.add_option('-r', '--wredir',action="store", help="Set this to enable answ
 
 parser.add_option('-c','--challenge', action="store", dest="optChal", help = "The server challenge to set for NTLM authentication.  If not set, then defaults to 1122334455667788, the most common challenge for existing Rainbow Tables", metavar="1122334455667788", default="1122334455667788")
 
-parser.add_option('-l','--logfile', action="store", dest="sessionLog", help = "Session ", metavar="Responder-Session.log", default="Responder-Session.log")
+parser.add_option('-l','--logfile', action="store", dest="sessionLog", help = "Log file to use for Responder session. ", metavar="Responder-Session.log", default="Responder-Session.log")
 
 
 options, args = parser.parse_args()
