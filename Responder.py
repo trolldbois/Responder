@@ -1,3 +1,4 @@
+#! /usr/bin/env python
 # NBT-NS/LLMNR Responder
 # Created by Laurent Gaffie
 # Copyright (C) 2012 Trustwave Holdings, Inc.
@@ -33,6 +34,10 @@ parser.add_option('-s', '--server',action="store", help="Set this to On or Off t
 
 parser.add_option('-r', '--wredir',action="store", help="Set this to enable answers for netbios wredir suffix queries. Answering to wredir will likely break stuff on the network (like classics 'nbns spoofer' will). Default value is therefore set to Off (0)", metavar="0",dest="Wredirect", choices=['1','0'], default="0")
 
+parser.add_option('-c','--challenge', action="store", dest="optChal", help = "The server challenge to set for NTLM authentication.  If not set, then defaults to 1122334455667788, the most common challenge for existing Rainbow Tables", metavar="1122334455667788", default="1122334455667788")
+
+parser.add_option('-l','--logfile', action="store", dest="sessionLog", help = "Log file to use for Responder session. ", metavar="Responder-Session.log", default="Responder-Session.log")
+
 
 options, args = parser.parse_args()
 
@@ -43,7 +48,7 @@ if options.OURIP is None:
 
 #Logger
 import logging
-logging.basicConfig(filename='Responder-Session.log',level=logging.INFO,format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
+logging.basicConfig(filename=options.sessionLog,level=logging.INFO,format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
 logging.warning('Responder Started')
 
 # Set some vars.
@@ -52,6 +57,8 @@ OURIP = options.OURIP
 Basic = options.Basic
 On_Off = options.on_off.upper()
 Wredirect = options.Wredirect
+NumChal = options.optChal
+
 
 def Show_Help(ExtraHelpData):
    help = "NBT Name Service/LLMNR Answerer 1.0.\nPlease send bugs/comments to: lgaffie@trustwave.com\nTo kill this script hit CRTL-C\n"
@@ -67,9 +74,10 @@ def WriteData(outfile,data):
 	 outf.write("\n")
          outf.close()
 
-# Change this if needed. Currently using the same challenge as metasploit since several rainbow tables were created with that challenge.
-Challenge = "\x11\x22\x33\x44\x55\x66\x77\x88"
-NumChal = "1122334455667788"
+# Break out challenge for the hexidecimally challenged.  Also, avoid 2 different challenges by accident.
+Challenge = ""
+for i in range(0,len(NumChal),2):
+	Challenge += "\\x" + NumChal[i:i+2]
 
 #Simple NBNS Services.
 W_REDIRECT   = "\x41\x41\x00"
@@ -928,12 +936,18 @@ SocketServer.TCPServer.allow_reuse_address = 1
 
 
 def serve_thread_udp(host, port, handler):
-    server = SocketServer.UDPServer((host, port), handler)
-    server.serve_forever()
+	try:
+		server = SocketServer.UDPServer((host, port), handler)
+		server.serve_forever()
+	except:
+		print "Error starting UDP server on port " + str(port) + ". Check that you have the necessary permissions (i.e. root) and no other servers are running."
  
 def serve_thread_tcp(host, port, handler):
-    server = SocketServer.TCPServer((host, port), handler)
-    server.serve_forever()
+	try:
+		server = SocketServer.TCPServer((host, port), handler)
+		server.serve_forever()
+	except:
+		print "Error starting TCP server on port " + str(port) + ". Check that you have the necessary permissions (i.e. root) and no other servers are running."
 
 def main():
     try:
