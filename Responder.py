@@ -383,6 +383,7 @@ class SMB1(SocketServer.BaseRequestHandler):
                 data = self.request.recv(1024)
              ##Negotiate proto answer.
               if data[8:10] == "\x72\x00":
+                print "SMB connection from:",self.client_address[0]
                 # Customize SMB answer.
                 head = SMBHeader(cmd="\x72",flag1="\x98", flag2="\x53\xc8",pid=pidcalc(data),tid=tidcalc(data),uid=uidcalc(data),mid=midcalc(data))
                 t = SMBNegoAns(Dialect=Parse_Nego_Dialect(data),Domain=DomainName,Key=Challenge)
