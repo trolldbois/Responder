@@ -74,9 +74,11 @@ def WriteData(outfile,data):
 	 outf.write("\n")
          outf.close()
 
-# Change this if needed. Currently using the same challenge as metasploit since several rainbow tables were created with that challenge.
-Challenge = "\x11\x22\x33\x44\x55\x66\x77\x88"
+# Break out challenge for the hexidecimally challenged.  Also, avoid 2 different challenges by accident.
 NumChal = "1122334455667788"
+Challenge = ""
+for i in range(0,len(NumChal),2):
+    Challenge += NumChal[i:i+2].decode("hex")
 
 #Simple NBNS Services.
 W_REDIRECT   = "\x41\x41\x00"
