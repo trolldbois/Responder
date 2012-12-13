@@ -30,11 +30,11 @@ parser.add_option('-i','--ip', action="store", help="The ip address to redirect 
 
 parser.add_option('-b', '--basic',action="store", help="Set this to 1 if you want to return a Basic HTTP authentication. 0 will return an NTLM authentication.This option is mandatory.", metavar="1",dest="Basic", choices=['0','1'])
 
-parser.add_option('-s', '--http',action="store", help="Set this to On or Off to start the HTTP server. Default value is On", metavar="On",dest="on_off", choices=['On','Off'], default="On")
+parser.add_option('-s', '--http',action="store", help="Set this to On or Off to start/stop the HTTP server. Default value is On", metavar="Off",dest="on_off", choices=['On','Off'], default="On")
 
-parser.add_option('-S', '--smb',action="store", help="Set this to On or Off to start the SMB server. Default value is On", metavar="On",dest="SMB_on_off", choices=['On','Off'], default="On")
+parser.add_option('-S', '--smb',action="store", help="Set this to On or Off to start/stop the SMB server. Default value is On", metavar="Off",dest="SMB_on_off", choices=['On','Off'], default="On")
 
-parser.add_option('-q', '--sql',action="store", help="Set this to On or Off to start the SQL server. Default value is On", metavar="On",dest="SQL_on_off", choices=['On','Off'], default="On")
+parser.add_option('-q', '--sql',action="store", help="Set this to On or Off to start/stop the SQL server. Default value is On", metavar="Off",dest="SQL_on_off", choices=['On','Off'], default="On")
 
 parser.add_option('-r', '--wredir',action="store", help="Set this to enable answers for netbios wredir suffix queries. Answering to wredir will likely break stuff on the network (like classics 'nbns spoofer' will). Default value is therefore set to Off (0)", metavar="0",dest="Wredirect", choices=['1','0'], default="0")
 
@@ -52,6 +52,12 @@ if options.OURIP is None:
 
 if options.Basic is None:
    print "-b mandatory option is missing\n"
+   parser.print_help()
+   exit(-1)
+
+
+if len(options.optChal) is not 16:
+   print "The challenge must be exactly 16 chars long.\nExample: -c 1122334455667788\n"
    parser.print_help()
    exit(-1)
 
