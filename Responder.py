@@ -86,7 +86,6 @@ def WriteData(outfile,data):
          outf.close()
 
 # Break out challenge for the hexidecimally challenged.  Also, avoid 2 different challenges by accident.
-NumChal = "1122334455667788"
 Challenge = ""
 for i in range(0,len(NumChal),2):
     Challenge += NumChal[i:i+2].decode("hex")
