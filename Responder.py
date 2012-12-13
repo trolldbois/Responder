@@ -63,7 +63,7 @@ if len(options.optChal) is not 16:
 
 #Logger
 import logging
-logging.basicConfig(filename=options.sessionLog,level=logging.INFO,format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
+logging.basicConfig(filename=str(options.sessionLog),level=logging.INFO,format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
 logging.warning('Responder Started')
 
 # Set some vars.
