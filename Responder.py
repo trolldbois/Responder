@@ -28,7 +28,7 @@ parser.add_option('-d','--domain', action="store", dest="DomainName", help = "Th
 
 parser.add_option('-i','--ip', action="store", help="The ip address to redirect the traffic to. (usually yours)", metavar="10.20.30.40",dest="OURIP")
 
-parser.add_option('-b', '--basic',action="store", help="Set this to 1 if you want to return a Basic HTTP authentication. 0 will return an NTLM authentication.Default setting is NTLM auth", metavar="1",dest="Basic", choices=['0','1'], default=0)
+parser.add_option('-b', '--basic',action="store", help="Set this to 1 if you want to return a Basic HTTP authentication. 0 will return an NTLM authentication.This option is mandatory.", metavar="1",dest="Basic", choices=['0','1'])
 
 parser.add_option('-s', '--server',action="store", help="Set this to On or Off to start the HTTP server", metavar="On",dest="on_off", choices=['On','Off'], default="On")
 
@@ -43,6 +43,11 @@ options, args = parser.parse_args()
 
 if options.OURIP is None:
    print "-i mandatory option is missing\n"
+   parser.print_help()
+   exit(-1)
+
+if options.Basic is None:
+   print "-b mandatory option is missing\n"
    parser.print_help()
    exit(-1)
 
