@@ -30,7 +30,11 @@ parser.add_option('-i','--ip', action="store", help="The ip address to redirect 
 
 parser.add_option('-b', '--basic',action="store", help="Set this to 1 if you want to return a Basic HTTP authentication. 0 will return an NTLM authentication.This option is mandatory.", metavar="1",dest="Basic", choices=['0','1'])
 
-parser.add_option('-s', '--server',action="store", help="Set this to On or Off to start the HTTP server", metavar="On",dest="on_off", choices=['On','Off'], default="On")
+parser.add_option('-s', '--http',action="store", help="Set this to On or Off to start the HTTP server. Default value is On", metavar="On",dest="on_off", choices=['On','Off'], default="On")
+
+parser.add_option('-S', '--smb',action="store", help="Set this to On or Off to start the SMB server. Default value is On", metavar="On",dest="SMB_on_off", choices=['On','Off'], default="On")
+
+parser.add_option('-q', '--sql',action="store", help="Set this to On or Off to start the SQL server. Default value is On", metavar="On",dest="SQL_on_off", choices=['On','Off'], default="On")
 
 parser.add_option('-r', '--wredir',action="store", help="Set this to enable answers for netbios wredir suffix queries. Answering to wredir will likely break stuff on the network (like classics 'nbns spoofer' will). Default value is therefore set to Off (0)", metavar="0",dest="Wredirect", choices=['1','0'], default="0")
 
@@ -61,6 +65,8 @@ DomainName = options.DomainName
 OURIP = options.OURIP
 Basic = options.Basic
 On_Off = options.on_off.upper()
+SMB_On_Off = options.SMB_on_off.upper()
+SQL_On_Off = options.SQL_on_off.upper()
 Wredirect = options.Wredirect
 NumChal = options.optChal
 
@@ -935,6 +941,21 @@ def Is_HTTP_On(on_off):
     if on_off == "OFF":
        return False
 
+
+#Function name self-explanatory
+def Is_SMB_On(SMB_On_Off):
+    if SMB_On_Off == "ON":
+       return thread.start_new(serve_thread_tcp, ('', 445,SMB1)),thread.start_new(serve_thread_tcp,('', 139,SMB1))
+    if SMB_On_Off == "OFF":
+       return False
+
+#Function name self-explanatory
+def Is_SQL_On(SQL_On_Off):
+    if SQL_On_Off == "ON":
+       return thread.start_new(serve_thread_tcp,('', 1433,MSSQL))
+    if SQL_On_Off == "OFF":
+       return False
+
 ##################################################################################
 #Loading the servers
 ##################################################################################
@@ -959,10 +980,10 @@ def serve_thread_tcp(host, port, handler):
 def main():
     try:
       Is_HTTP_On(On_Off)
-      thread.start_new(serve_thread_tcp, ('', 445,SMB1))
-      thread.start_new(serve_thread_tcp,('', 139,SMB1))
+      Is_SMB_On(SMB_On_Off)
+      Is_SQL_On(SQL_On_Off)
+      ## Poisoner loaded by default, it's the purpose of this tool...
       thread.start_new(serve_thread_udp,('', 137,NB))
-      thread.start_new(serve_thread_tcp,('', 1433,MSSQL))
       thread.start_new(RunLLMNR())
     except KeyboardInterrupt:
         exit()
