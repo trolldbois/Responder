@@ -38,13 +38,19 @@ FEATURES
   name suffix). For Vista and higher, LLMNR will be used. This server 
   supports NTLMv1, NTLMv2 hashes *and* Basic Authentication. This server
   was successfully tested on IE 6 to IE 10, Firefox, Chrome, Safari.
+  Note: This module also works for WebDav NTLM authentication issued from
+  Windows WebDav clients (WebClient).
 
 - All hashes are printed to stdout and dumped in an unique file John
   Jumbo compliant, using this format:
   (SMB or MSSQL or HTTP)-(ntlm-v1 or v2 or clear-text)-Client_IP.txt
   The file will be located in the current folder.
 
-- Now logs all Responder activity to a file.
+- Responder will logs all its activity to a file Responder-Session.log.
+
+- When the option -f is set to "On", Responder will fingerprint every host who issued an LLMNR/NBT-NS query.
+  All capture modules still work while in fingerprint mode. 
+
 
 CONSIDERATIONS
 ==============
@@ -56,18 +62,6 @@ CONSIDERATIONS
 
 - This tool will *not* work on Windows by default.
 
-- Please note that if you don't use rainbow tables to crack the hashes,
-  it is *better* change these 2 vars accordingly in Responder.py:
-
-  line 47: " # Change this if needed. Currently using the same
-             challenge as Metasploit since several rainbow tables were
-             created with that challenge.
-             Challenge = "\x11\x22\x33\x44\x55\x66\x77\x88"
-             NumChal = "1122334455667788" "
- 
-  Apparently, Windows, under certain circumstances does not send valids SMB
-  NTLMv1 credentials when the fixed challenge 1122334455667788 is set.
-
 
 USAGE
 =====
@@ -76,16 +70,52 @@ Running this tool:
 
 - python Responder.py [options]
 
-Example:
+Usage Example:
 
-python Responder.py -d PDC01 -i 10.20.30.40 -b 1 -s On -r 0
+python Responder.py -i 10.20.30.40 -b 1 -s On -r 0 -f On
 
-If you're not joined to a domain, use:
+Options List:
 
-python Responder.py -d WORKGROUP -i 10.20.30.40
+-h, --help                           show this help message and exit.
+
+-d PDC01, --domain=PDC01             The target domain name, if not set,
+                                     this tool will use WORKGROUP by default.
+
+-i 10.20.30.40, --ip=10.20.30.40     The ip address to redirect the traffic to.
+                                     (usually yours)
+
+-b 0, --basic=0                      Set this to 1 if you want to return a 
+                                     Basic HTTP authentication. 0 will return 
+                                     an NTLM authentication.
+
+-s Off, --http=Off                   Set this to On or Off to start/stop the
+                                     HTTP server. Default value is On.
+
+-S Off, --smb=Off                    Set this to On or Off to start/stop the
+                                     SMB server. Default value is On.
+
+-q Off, --sql=Off                    Set this to On or Off to start/stop the
+                                     SQL server. Default value is On.
+
+-r 0, --wredir=0                     Set this to enable answers for netbios 
+                                     wredir suffix queries. Answering to wredir
+                                     will likely break stuff on the network 
+                                     (like classics 'nbns spoofer' will).
+                                     Default value is therefore set to Off (0).
+
+-c 1122334455667788, --challenge=    The server challenge to set for NTLM
+                                     authentication. If not set, then defaults
+                                     to 1122334455667788, the most common
+                                     challenge for existing Rainbow Tables.
+
+-l file.log, --logfile=filename.log  Log file to use for Responder session.
+
+-f Off, --fingerprint=Off            This option allows you to fingerprint a 
+                                     host that issued an NBT-NS or LLMNR query.
 
 For more information read this post: 
 http://blog.spiderlabs.com/2012/10/introducing-responder-10.html
+
 
 COPYRIGHT
 =========
