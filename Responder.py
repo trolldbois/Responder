@@ -177,9 +177,13 @@ class NB(SocketServer.BaseRequestHandler):
               print "NBT-NS Answer sent to: ", self.client_address[0]
               logging.warning('NBT-NS Answer sent to: %s'%(self.client_address[0]))
               if Is_Finger_On(Finger_On_Off):
-                 Finger = RunSmbFinger((self.client_address[0],445))
-                 logging.warning('[+] OsVersion is:%s'%(Finger[0]))
-                 logging.warning('[+] ClientVersion is :%s'%(Finger[1]))
+                 try:
+                    Finger = RunSmbFinger((self.client_address[0],445))
+                    logging.warning('[+] OsVersion is:%s'%(Finger[0]))
+                    logging.warning('[+] ClientVersion is :%s'%(Finger[1]))
+                 except Exception:
+                    logging.warning('[+] Fingerprint failed for host: %s'%(self.client_address[0]))
+                    pass
 
 ##################################################################################
 #SMB Stuff
@@ -401,7 +405,6 @@ class SMB1(SocketServer.BaseRequestHandler):
               data = self.request.recv(1024)
               self.request.settimeout(0.1)
               ##session request 139
-              #print data.encode("hex")
               if data[0] == "\x81":
                 buffer0 = "\x82\x00\x00\x00"         
                 self.request.send(buffer0)
@@ -729,9 +732,13 @@ def RunLLMNR():
                 for x in range(1):
                    sock.sendto(str(buff), addr)
                 if Is_Finger_On(Finger_On_Off):
-                   Finger = RunSmbFinger((addr[0],445))
-                   logging.warning('[+] OsVersion is:%s'%(Finger[0]))
-                   logging.warning('[+] ClientVersion is :%s'%(Finger[1]))
+                   try:
+                      Finger = RunSmbFinger((addr[0],445))
+                      logging.warning('[+] OsVersion is:%s'%(Finger[0]))
+                      logging.warning('[+] ClientVersion is :%s'%(Finger[1]))
+                   except Exception:
+                      logging.warning('[+] Fingerprint failed for host: %s'%(addr[0]))
+                      pass
        except:
           raise
 

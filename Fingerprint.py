@@ -112,7 +112,7 @@ def OsNameClientVersion(data):
 def RunSmbFinger(host):
     s = socket(AF_INET, SOCK_STREAM)
     s.connect(host)
-    s.settimeout(0.1)
+    s.settimeout(0.7)
     h = SMBHeader(cmd="\x72",flag1="\x18",flag2="\x53\xc8")
     n = SMBNego(data = SMBNegoData())
     n.calculate()
