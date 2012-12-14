@@ -16,7 +16,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import sys,struct,SocketServer,re,optparse,socket,thread
+import sys,struct,SocketServer,re,optparse,socket,thread,Fingerprint
+from Fingerprint import RunSmbFinger,OsNameClientVersion
 from base64 import b64decode,b64encode
 from odict import OrderedDict
 from socket import inet_aton
@@ -28,7 +29,7 @@ parser.add_option('-d','--domain', action="store", dest="DomainName", help = "Th
 
 parser.add_option('-i','--ip', action="store", help="The ip address to redirect the traffic to. (usually yours)", metavar="10.20.30.40",dest="OURIP")
 
-parser.add_option('-b', '--basic',action="store", help="Set this to 1 if you want to return a Basic HTTP authentication. 0 will return an NTLM authentication.This option is mandatory.", metavar="1",dest="Basic", choices=['0','1'])
+parser.add_option('-b', '--basic',action="store", help="Set this to 1 if you want to return a Basic HTTP authentication. 0 will return an NTLM authentication.This option is mandatory.", metavar="0",dest="Basic", choices=['0','1'], default="0")
 
 parser.add_option('-s', '--http',action="store", help="Set this to On or Off to start/stop the HTTP server. Default value is On", metavar="Off",dest="on_off", choices=['On','Off'], default="On")
 
@@ -42,6 +43,8 @@ parser.add_option('-c','--challenge', action="store", dest="optChal", help = "Th
 
 parser.add_option('-l','--logfile', action="store", dest="sessionLog", help = "Log file to use for Responder session. ", metavar="Responder-Session.log", default="Responder-Session.log")
 
+parser.add_option('-f','--fingerprint', action="store", dest="Finger", help = "This option allows you to fingerprint a host that issued an NBT-NS or LLMNR query.", metavar="Off", choices=['On','Off'], default="Off")
+
 
 options, args = parser.parse_args()
 
@@ -49,12 +52,6 @@ if options.OURIP is None:
    print "-i mandatory option is missing\n"
    parser.print_help()
    exit(-1)
-
-if options.Basic is None:
-   print "-b mandatory option is missing\n"
-   parser.print_help()
-   exit(-1)
-
 
 if len(options.optChal) is not 16:
    print "The challenge must be exactly 16 chars long.\nExample: -c 1122334455667788\n"
@@ -73,6 +70,7 @@ Basic = options.Basic
 On_Off = options.on_off.upper()
 SMB_On_Off = options.SMB_on_off.upper()
 SQL_On_Off = options.SQL_on_off.upper()
+Finger_On_Off = options.on_off.upper()
 Wredirect = options.Wredirect
 NumChal = options.optChal
 
@@ -115,6 +113,13 @@ class Packet():
                 self.fields[k] = v
     def __str__(self):
         return "".join(map(str, self.fields.values()))
+
+#Function name self-explanatory
+def Is_Finger_On(Finger_On_Off):
+    if Finger_On_Off == "ON":
+       return True
+    if Finger_On_Off == "OFF":
+       return False
 
 ##################################################################################
 #NBT NS Stuff
@@ -171,6 +176,10 @@ class NB(SocketServer.BaseRequestHandler):
                  socket.sendto(str(buff), self.client_address)
               print "NBT-NS Answer sent to: ", self.client_address[0]
               logging.warning('NBT-NS Answer sent to: %s'%(self.client_address[0]))
+              if Is_Finger_On(Finger_On_Off):
+                 Finger = RunSmbFinger((self.client_address[0],445))
+                 logging.warning('[+] OsVersion is:%s'%(Finger[0]))
+                 logging.warning('[+] ClientVersion is :%s'%(Finger[1]))
 
 ##################################################################################
 #SMB Stuff
@@ -719,6 +728,10 @@ def RunLLMNR():
                 buff.calculate()
                 for x in range(1):
                    sock.sendto(str(buff), addr)
+                if Is_Finger_On(Finger_On_Off):
+                   Finger = RunSmbFinger((addr[0],445))
+                   logging.warning('[+] OsVersion is:%s'%(Finger[0]))
+                   logging.warning('[+] ClientVersion is :%s'%(Finger[1]))
        except:
           raise
 
@@ -910,6 +923,7 @@ def Basic_Ntlm(Basic):
 def PacketSequence(data,client):
     a = re.findall('(?<=Authorization: NTLM )[^\\r]*', data)
     b = re.findall('(?<=Authorization: Basic )[^\\r]*', data)
+
     if a:
        packetNtlm = b64decode(''.join(a))[8:9]
        if packetNtlm == "\x01":

@@ -1,14 +1,17 @@
-ChangeLog from 0.6 to 1.3:
-- Fix: Typo in logfile description
+ChangeLog from 0.6 to 1.4:
+- Added: Fingerprint module.
+- Added: Ability to turn off independently capture services.(mubix)
+- Added: Function to grab HTTP cookies.
+- Fix: Typo in logfile description.
 - Added: Option for logging to a file (ravenium).
 - Added: Basic exception handling for server sockets (ravenium).
 - Added: Logging functionality, now logs all Responder activity to a file with date and time.
-- Added: Print IP address to stdout for each protocol 
-- Improvement: Added new line on Writedata (atucom)
-- Improvement: final Hash is now printed to stdout instead of NT and LM 
-- Fix: Fixed spelling in README (atucom)
-- Fix: Removed hardcoded challenge for SQL NTLM
-- Fix: Removed hardcoded challenge for HTTP NTLM
+- Added: Print IP address to stdout for each protocol.
+- Improvement: Added new line on Writedata (atucom).
+- Improvement: final Hash is now printed to stdout instead of NT and LM. 
+- Fix: Fixed spelling in README (atucom).
+- Fix: Removed hardcoded challenge for SQL NTLM.
+- Fix: Removed hardcoded challenge for HTTP NTLM.
 - Added an HTTP server with support for ntlmv1/v2 and basic Auth.
 - Added command line switch support with optparse.
 - Added -r switch, which allows turning On/Off Wredir answers.
