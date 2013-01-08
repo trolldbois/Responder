@@ -51,6 +51,7 @@ FEATURES
 - When the option -f is set to "On", Responder will fingerprint every host who issued an LLMNR/NBT-NS query.
   All capture modules still work while in fingerprint mode. 
 
+- Browser Listener finds the PDC in stealth mode.
 
 CONSIDERATIONS
 ==============
