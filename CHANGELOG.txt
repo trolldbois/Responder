@@ -1,4 +1,7 @@
-ChangeLog from 0.6 to 1.4:
+ChangeLog from 0.6 to 1.5:
+- Several changes.
+- Removed: -d option (Domain), useless for now.
+- Added: SMB Extended Security NTLMSSP authentication. 
 - Added: Fingerprint module.
 - Added: Ability to turn off independently capture services.(mubix)
 - Added: Function to grab HTTP cookies.

@@ -19,7 +19,7 @@ FEATURES
 ========
 
 - Built-in SMB Auth server.
-  Supports NTLMv1, NTLMv2 hashes. Successfully tested from Windows NT4
+  Supports NTLMv1, NTLMv2 hashes with Extended Security NTLMSSP. Successfully tested from Windows NT4
   to Server 2012 RC, Samba and Mac OSX Lion. This functionality is enabled
   by default when the tool is launched.
 
@@ -77,9 +77,6 @@ python Responder.py -i 10.20.30.40 -b 1 -s On -r 0 -f On
 Options List:
 
 -h, --help                           show this help message and exit.
-
--d PDC01, --domain=PDC01             The target domain name, if not set,
-                                     this tool will use WORKGROUP by default.
 
 -i 10.20.30.40, --ip=10.20.30.40     The ip address to redirect the traffic to.
                                      (usually yours)
