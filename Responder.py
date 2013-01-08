@@ -71,7 +71,6 @@ On_Off = options.on_off.upper()
 SMB_On_Off = options.SMB_on_off.upper()
 SQL_On_Off = options.SQL_on_off.upper()
 Finger_On_Off = options.Finger.upper()
-print "Finger is:",Finger_On_Off
 Wredirect = options.Wredirect
 NumChal = options.optChal
 
@@ -412,7 +411,6 @@ class SMB1(SocketServer.BaseRequestHandler):
                 data = self.request.recv(1024)
              ##Negotiate proto answer.
               if data[8:10] == "\x72\x00":
-                print "SMB connection from:",self.client_address[0]
                 # Customize SMB answer.
                 head = SMBHeader(cmd="\x72",flag1="\x98", flag2="\x53\xc8",pid=pidcalc(data),tid=tidcalc(data),uid=uidcalc(data),mid=midcalc(data))
                 t = SMBNegoAns(Dialect=Parse_Nego_Dialect(data),Domain=DomainName,Key=Challenge)
