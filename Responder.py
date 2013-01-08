@@ -70,7 +70,8 @@ Basic = options.Basic
 On_Off = options.on_off.upper()
 SMB_On_Off = options.SMB_on_off.upper()
 SQL_On_Off = options.SQL_on_off.upper()
-Finger_On_Off = options.on_off.upper()
+Finger_On_Off = options.Finger.upper()
+print "Finger is:",Finger_On_Off
 Wredirect = options.Wredirect
 NumChal = options.optChal
 
@@ -1033,6 +1034,7 @@ if __name__ == '__main__':
     except:
         raise
     raw_input()
+
 
 
 
