@@ -192,7 +192,7 @@ def FindPDC(data,Client):
        Domain = ''.join(tuple(BrowserPacket[6:].split('\x00'))[:1])
        if Domain == "WORKGROUP":
           print "[Browser]Received announcement for Workgroup.. ignoring"
-       if Domain == "MSHOME":
+       elif Domain == "MSHOME":
           print "[Browser]Received announcement for MSHOME.. ignoring"
        else:
           print "[Browser]PDC ip address is: ",Client
@@ -219,7 +219,6 @@ class Browser(SocketServer.BaseRequestHandler):
 #SMB Server
 ##################################################################################
 from SMBPackets import *
-
 
 #Detect if SMB auth was Anonymous
 def Is_Anonymous(data):
@@ -387,7 +386,7 @@ class SMB1(SocketServer.BaseRequestHandler):
              ##Tree Connect IPC Answer
               if data[8:10] == "\x75\x00":
                 ParseShare(data)
-                head = SMBHeader(cmd="\x75",flag1="\x88", flag2="\x01\xc8", errorcode="\x00\x00\x00\x00", tid=chr(randrange(256))+chr(randrange(256)), uid=uidcalc(data), mid=midcalc(data))
+                head = SMBHeader(cmd="\x75",flag1="\x88", flag2="\x01\xc8", errorcode="\x00\x00\x00\x00", pid=pidcalc(data), tid=chr(randrange(256))+chr(randrange(256)), uid=uidcalc(data), mid=midcalc(data))
                 t = SMBTreeData()
                 t.calculate()
                 final = t 
