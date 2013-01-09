@@ -41,6 +41,9 @@ FEATURES
   Note: This module also works for WebDav NTLM authentication issued from
   Windows WebDav clients (WebClient).
 
+- Built-in FTP Auth server.
+  This module will collect FTP clear text credentials.
+
 - All hashes are printed to stdout and dumped in an unique file John
   Jumbo compliant, using this format:
   (SMB or MSSQL or HTTP)-(ntlm-v1 or v2 or clear-text)-Client_IP.txt
@@ -56,8 +59,8 @@ FEATURES
 CONSIDERATIONS
 ==============
 
-- This tool listen on several port: UDP 137, TCP 1433,
-  TCP 80, TCP 139, TCP 445, Multicast UDP 5553.
+- This tool listen on several port: UDP 137, UDP 138, TCP 1433,
+  TCP 80, TCP 139, TCP 445, TCP 21, Multicast UDP 5553.
   If you run Samba on your system, stop smbd and nmbd and all other 
   services listening on these ports.
 
@@ -73,7 +76,7 @@ Running this tool:
 
 Usage Example:
 
-python Responder.py -i 10.20.30.40 -b 1 -s On -r 0 -f On
+python Responder.py -i 10.20.30.40 -b 1 -r 0 -f On
 
 Options List:
 
@@ -110,6 +113,10 @@ Options List:
 
 -f Off, --fingerprint=Off            This option allows you to fingerprint a 
                                      host that issued an NBT-NS or LLMNR query.
+
+-F On, --ftp=On                      Set this to On or Off to start/stop the FTP server.
+                                     Default value is On
+
 
 For more information read this post: 
 http://blog.spiderlabs.com/2012/10/introducing-responder-10.html
