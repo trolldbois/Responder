@@ -19,7 +19,7 @@ FEATURES
 ========
 
 - Built-in SMB Auth server.
-  Supports NTLMv1, NTLMv2 hashes with Extended Security NTLMSSP. Successfully tested from Windows NT4
+  Supports NTLMv1, NTLMv2 hashes with Extended Security NTLMSSP. Successfully tested from Windows 2000
   to Server 2012 RC, Samba and Mac OSX Lion. This functionality is enabled
   by default when the tool is launched.
 
